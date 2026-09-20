@@ -1,0 +1,47 @@
+{
+  "name": "cse-demo-trading-backend",
+  "version": "1.0.0",
+  "description": "Colombo Stock Exchange (CSE) Demo Trading Platform Backend",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "prepare:schema": "node scripts/prepare-schema.js",
+    "build": "node scripts/prepare-schema.js && prisma generate && tsc",
+    "render:build": "node scripts/prepare-schema.js && prisma generate && prisma db push --accept-data-loss && tsc",
+    "start": "node dist/index.js",
+    "prisma:generate": "node scripts/prepare-schema.js && prisma generate",
+    "prisma:push": "node scripts/prepare-schema.js && prisma db push",
+    "prisma:seed": "ts-node prisma/seed.ts",
+    "test": "jest --runInBand"
+  },
+  "keywords": ["cse", "colombo-stock-exchange", "trading", "fintech"],
+  "author": "Antigravity",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^5.20.0",
+    "axios": "^1.7.7",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "jsonwebtoken": "^9.0.2",
+    "socket.io": "^4.8.0",
+    "uuid": "^10.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.13",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.7.4",
+    "@types/uuid": "^10.0.0",
+    "jest": "^29.7.0",
+    "prisma": "^5.20.0",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.6.2"
+  }
+}

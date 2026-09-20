@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cse_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: cse_user
+      POSTGRES_PASSWORD: cse_password
+      POSTGRES_DB: cse_demo
+    ports:
+      - "5432:5432"
+    volumes:
+      - cse_pgdata:/var/lib/postgresql/data
+
+volumes:
+  cse_pgdata:

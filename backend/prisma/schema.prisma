@@ -1,0 +1,137 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  email        String    @unique
+  passwordHash    String
+  securityPinHash String?
+  role            String    @default("USER") // "USER" or "ADMIN"
+  createdAt       DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  wallet            Wallet?
+  holdings          Holding[]
+  orders            Order[]
+  trades            Trade[]
+  tournamentEntries TournamentParticipant[]
+}
+
+model Wallet {
+  id            String    @id @default(uuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance       Float     @default(1000000.0) // Rs. 1,000,000.00 LKR virtual capital
+  lockedBalance Float     @default(0.0)      // Capital locked for pending/queued BUY orders
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Holding {
+  id              String    @id @default(uuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticker          String
+  shares          Int       @default(0)
+  lockedShares    Int       @default(0)      // Shares locked for pending/queued SELL orders
+  averageBuyPrice Float     @default(0.0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([userId, ticker])
+}
+
+model Order {
+  id               String    @id @default(uuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticker           String
+  side             String    // "BUY" or "SELL"
+  orderType        String    // "MARKET" or "LIMIT"
+  status           String    // "QUEUED", "PENDING", "EXECUTED", "CANCELLED", "REJECTED"
+  targetLimitPrice Float?
+  executedPrice    Float?
+  shares           Int
+  executedShares   Int       @default(0)
+  feeAmount        Float     @default(0.0)
+  totalCost        Float     @default(0.0)
+  notes            String?
+  createdAt        DateTime  @default(now())
+  executedAt       DateTime?
+
+  trades           Trade[]
+}
+
+model Trade {
+  id            String    @id @default(uuid())
+  orderId       String
+  order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticker        String
+  side          String    // "BUY" or "SELL"
+  shares        Int
+  executedPrice Float
+  grossAmount   Float
+  feeAmount     Float     // 1.12% CSE fee
+  netAmount     Float
+  createdAt     DateTime  @default(now())
+}
+
+model MarketTicker {
+  symbol          String    @id
+  name            String
+  sector          String
+  lastTradedPrice Float
+  openPrice       Float
+  highPrice       Float
+  lowPrice        Float
+  previousClose   Float
+  change          Float
+  changePercent   Float
+  volume          Int
+  turnover        Float
+  updatedAt       DateTime  @updatedAt
+}
+
+model MarketSession {
+  id               String   @id @default("singleton")
+  isOverrideActive Boolean  @default(false)
+  overrideStatus   String   @default("OPEN") // "OPEN" or "CLOSED"
+  updatedAt        DateTime @updatedAt
+}
+
+model Tournament {
+  id           String                  @id @default(uuid())
+  title        String
+  description  String?
+  category     String                  @default("CUSTOM") // "WEEKLY", "MONTHLY", "CUSTOM"
+  startDate    DateTime
+  endDate      DateTime
+  status       String                  @default("ACTIVE") // "UPCOMING", "ACTIVE", "COMPLETED"
+  prizeDetails String?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  participants TournamentParticipant[]
+}
+
+model TournamentParticipant {
+  id              String     @id @default(uuid())
+  tournamentId    String
+  tournament      Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startingCapital Float      @default(1000000.0)
+  finalReturn     Float?
+  rank            Int?
+  joinedAt        DateTime   @default(now())
+
+  @@unique([tournamentId, userId])
+}
