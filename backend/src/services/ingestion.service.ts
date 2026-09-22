@@ -31,6 +31,7 @@ export function classifySector(name: string, symbol: string): string {
 
 export class IngestionService {
   private static isInitialized = false;
+  private static cachedTickers: any[] = [];
   private static intervalId: NodeJS.Timeout | null = null;
   private static onTickCallback?: (tickers: any[], indices: MarketIndex[]) => void;
 
@@ -49,12 +50,24 @@ export class IngestionService {
     changePercent: -0.14
   };
 
+  public static getCachedTickers(): any[] {
+    return this.cachedTickers;
+  }
+
   /**
    * Ensure ALL listed CSE stocks are seeded in database
    */
   public static async ensureDefaultTickers() {
+    if (this.isInitialized && this.cachedTickers.length > 0) return;
+
     const existingCount = await prisma.marketTicker.count();
-    if (existingCount >= 200 && this.isInitialized) return;
+    if (existingCount >= 200) {
+      this.isInitialized = true;
+      if (this.cachedTickers.length === 0) {
+        this.cachedTickers = await prisma.marketTicker.findMany({ orderBy: { symbol: 'asc' } });
+      }
+      return;
+    }
 
     // Load full 285 stocks from local snapshot or fetch live
     let stocksList: any[] = [];
@@ -252,20 +265,44 @@ export class IngestionService {
   }
 
   /**
-   * Generate stochastic price ticks (used during simulation / demo sessions)
+   * Generate stochastic price ticks (used during simulation / demo sessions).
+   * High performance: updates only 4-6 active liquid stocks per tick to prevent DB saturation.
    */
   public static async simulateMarketTicks(forceSimulate = false) {
-    const tickers = await prisma.marketTicker.findMany();
-    if (tickers.length === 0) {
-      await this.ensureDefaultTickers();
-      return;
+    let tickers = this.cachedTickers;
+    if (!tickers || tickers.length === 0) {
+      tickers = await prisma.marketTicker.findMany({ orderBy: { symbol: 'asc' } });
+      this.cachedTickers = tickers;
     }
 
-    const updatedTickers = [];
+    if (tickers.length === 0) {
+      await this.ensureDefaultTickers();
+      tickers = this.cachedTickers;
+      if (tickers.length === 0) return { tickers: [], indices: [this.aspi, this.spSl20] };
+    }
 
-    // During regular tick cycles, update a realistic subset of active stocks
+    // Select 5-6 active liquid stocks per tick (realistic CSE market movement)
+    const activeSymbols = new Set([
+      'JKH.N0000', 'COMB.N0000', 'HNB.N0000', 'SAMP.N0000', 'DIAL.N0000', 'BIL.N0000', 'LIOC.N0000'
+    ]);
+
+    // Pick 2 blue chips + 3 random stocks to simulate live trading action
+    const randomPicked = tickers
+      .filter((t) => !activeSymbols.has(t.symbol))
+      .sort(() => 0.5 - Math.random())
+      .slice(0, 3)
+      .map((t) => t.symbol);
+
+    const targetSymbolsToTick = new Set([
+      Array.from(activeSymbols)[Math.floor(Math.random() * activeSymbols.size)],
+      Array.from(activeSymbols)[Math.floor(Math.random() * activeSymbols.size)],
+      ...randomPicked
+    ]);
+
+    const updatedTickers: any[] = [];
+
     for (const ticker of tickers) {
-      if (Math.random() > 0.6 || forceSimulate) {
+      if (targetSymbolsToTick.has(ticker.symbol) || forceSimulate) {
         const deltaPercent = (Math.random() * 0.8 - 0.38) / 100;
         let newPrice = Math.round(ticker.lastTradedPrice * (1 + deltaPercent) * 100) / 100;
         if (newPrice < 0.5) newPrice = 0.5;
@@ -278,24 +315,29 @@ export class IngestionService {
         const newVolume = ticker.volume + additionalVolume;
         const newTurnover = Math.round((ticker.turnover + additionalVolume * newPrice) * 100) / 100;
 
-        const updated = await prisma.marketTicker.update({
-          where: { symbol: ticker.symbol },
-          data: {
-            lastTradedPrice: newPrice,
-            change,
-            changePercent,
-            highPrice: newHigh,
-            lowPrice: newLow,
-            volume: newVolume,
-            turnover: newTurnover
-          }
-        });
-
-        updatedTickers.push(updated);
+        try {
+          const updated = await prisma.marketTicker.update({
+            where: { symbol: ticker.symbol },
+            data: {
+              lastTradedPrice: newPrice,
+              change,
+              changePercent,
+              highPrice: newHigh,
+              lowPrice: newLow,
+              volume: newVolume,
+              turnover: newTurnover
+            }
+          });
+          updatedTickers.push(updated);
+        } catch {
+          updatedTickers.push(ticker);
+        }
       } else {
         updatedTickers.push(ticker);
       }
     }
+
+    this.cachedTickers = updatedTickers;
 
     // Minor index fluctuations
     const aspiDelta = Math.round((Math.random() * 6 - 2.9) * 100) / 100;
@@ -350,20 +392,29 @@ export class IngestionService {
   }
 
   /**
-   * Get all tickers currently in DB
+   * Get all tickers (served directly from RAM cache in 0ms)
    */
   public static async getAllTickers() {
+    if (this.cachedTickers.length > 0) {
+      return this.cachedTickers;
+    }
     await this.ensureDefaultTickers();
-    return prisma.marketTicker.findMany({
-      orderBy: { symbol: 'asc' }
-    });
+    if (this.cachedTickers.length === 0) {
+      this.cachedTickers = await prisma.marketTicker.findMany({
+        orderBy: { symbol: 'asc' }
+      });
+    }
+    return this.cachedTickers;
   }
 
   /**
-   * Get single ticker by symbol
+   * Get single ticker by symbol (served from RAM cache)
    */
   public static async getTicker(symbol: string) {
-    await this.ensureDefaultTickers();
+    if (this.cachedTickers.length > 0) {
+      const found = this.cachedTickers.find((t) => t.symbol === symbol);
+      if (found) return found;
+    }
     return prisma.marketTicker.findUnique({
       where: { symbol }
     });

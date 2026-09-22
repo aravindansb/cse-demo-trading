@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
-import api from '../lib/api';
+import api, { getSocketUrl } from '../lib/api';
 import { useAuth } from './AuthContext';
 
 export interface MarketTicker {
@@ -138,10 +138,12 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     fetchInitialData();
 
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 
-      (typeof window !== 'undefined' ? `http://${window.location.hostname}:5000` : 'http://localhost:5000');
+    const socketUrl = getSocketUrl();
     const s = io(socketUrl, {
       transports: ['websocket', 'polling'],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+      timeout: 10000,
     });
 
     setSocket(s);

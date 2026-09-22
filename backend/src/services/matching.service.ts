@@ -363,6 +363,47 @@ export class MatchingService {
   }
 
   /**
+   * High-performance batch evaluation of all PENDING limit orders across all ticked stocks.
+   * Executes in a single database query instead of querying per ticker.
+   */
+  public static async evaluateAllPendingLimitOrders(tickers: Array<{ symbol: string; lastTradedPrice: number }>) {
+    const pendingOrders = await prisma.order.findMany({
+      where: {
+        status: 'PENDING',
+        orderType: 'LIMIT'
+      }
+    });
+
+    if (pendingOrders.length === 0) return [];
+
+    const priceMap = new Map<string, number>();
+    for (const t of tickers) {
+      priceMap.set(t.symbol, t.lastTradedPrice);
+    }
+
+    const executedOrders = [];
+    for (const order of pendingOrders) {
+      const currentPrice = priceMap.get(order.ticker);
+      if (currentPrice === undefined || !order.targetLimitPrice) continue;
+
+      const shouldExecute =
+        (order.side === 'BUY' && currentPrice <= order.targetLimitPrice) ||
+        (order.side === 'SELL' && currentPrice >= order.targetLimitPrice);
+
+      if (shouldExecute) {
+        try {
+          const executed = await this.executeOrder(order.id, currentPrice);
+          executedOrders.push(executed);
+        } catch (err) {
+          console.error(`Failed to execute limit order ${order.id}:`, err);
+        }
+      }
+    }
+
+    return executedOrders;
+  }
+
+  /**
    * Evaluate PENDING limit orders on incoming market price ticks
    */
   public static async evaluatePendingOrdersOnTick(tickerSymbol: string, newPrice: number) {

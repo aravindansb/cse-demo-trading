@@ -4,6 +4,7 @@ dotenv.config();
 import http from 'http';
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 
 import authRoutes from './routes/auth.routes';
 import orderRoutes from './routes/order.routes';
@@ -27,6 +28,7 @@ app.use(cors({
   origin: '*',
   credentials: true
 }));
+app.use(compression());
 app.use(express.json());
 
 // API Routes
@@ -38,6 +40,11 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/superuser', telemetryRoutes);
+
+// Instant ping / keepalive endpoint (0 DB load)
+app.get('/api/ping', (req, res) => {
+  res.status(200).send('pong');
+});
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

@@ -1,5 +1,6 @@
 import prisma from '../utils/prisma';
 import { CSE_CONFIG } from '../config/constants';
+import { IngestionService } from './ingestion.service';
 
 export class PortfolioService {
   /**
@@ -18,11 +19,17 @@ export class PortfolioService {
       where: { userId, shares: { gt: 0 } }
     });
 
-    // Fetch current prices for all held tickers
-    const tickers = await prisma.marketTicker.findMany();
+    // Fetch current prices from RAM cache or query strictly the held tickers
+    const cached = IngestionService.getCachedTickers();
     const tickerMap = new Map<string, any>();
-    for (const t of tickers) {
-      tickerMap.set(t.symbol, t);
+    if (cached && cached.length > 0) {
+      for (const t of cached) tickerMap.set(t.symbol, t);
+    } else {
+      const heldSymbols = holdings.map((h) => h.ticker);
+      const tickers = heldSymbols.length > 0
+        ? await prisma.marketTicker.findMany({ where: { symbol: { in: heldSymbols } } })
+        : [];
+      for (const t of tickers) tickerMap.set(t.symbol, t);
     }
 
     let totalStockValue = 0;

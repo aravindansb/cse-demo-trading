@@ -84,21 +84,15 @@ export const initSocketServer = (httpServer: HttpServer) => {
     // Check if market is active before evaluating limit orders
     const marketStatus = await MarketHoursService.isMarketOpen();
     if (marketStatus.isOpen) {
-      for (const ticker of tickers) {
-        const executedOrders = await MatchingService.evaluatePendingOrdersOnTick(
-          ticker.symbol,
-          ticker.lastTradedPrice
-        );
-
-        for (const order of executedOrders) {
-          io.to(`user:${order.userId}`).emit('order:executed', {
-            order,
-            message: `Your limit order for ${order.shares} shares of ${order.ticker} has executed at Rs. ${order.executedPrice?.toFixed(2)}.`
-          });
-        }
-        if (executedOrders.length > 0) {
-          io.emit('market:orders-updated');
-        }
+      const executedOrders = await MatchingService.evaluateAllPendingLimitOrders(tickers);
+      for (const order of executedOrders) {
+        io.to(`user:${order.userId}`).emit('order:executed', {
+          order,
+          message: `Your limit order for ${order.shares} shares of ${order.ticker} has executed at Rs. ${order.executedPrice?.toFixed(2)}.`
+        });
+      }
+      if (executedOrders.length > 0) {
+        io.emit('market:orders-updated');
       }
     }
   });
