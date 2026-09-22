@@ -14,10 +14,6 @@ import {
   History, 
   LogOut, 
   User as UserIcon, 
-  Play, 
-  Pause,
-  SlidersHorizontal,
-  ChevronDown,
   RefreshCw,
   CheckCircle2,
   FileText,
@@ -28,8 +24,7 @@ import {
 export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const { indices, marketStatus, toggleMarketSessionOverride, syncCseData, isSyncingCse } = useMarket();
-  const [showOverrideMenu, setShowOverrideMenu] = useState(false);
+  const { indices, marketStatus, syncCseData, isSyncingCse } = useMarket();
 
   return (
     <header className="border-b border-fintech-border bg-fintech-card sticky top-0 z-40">
@@ -188,81 +183,10 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
           </nav>
         </div>
 
-        {/* Right Section: Session Simulator Toggle & User State */}
+        {/* Right Section: User Profile / Auth State */}
         <div className="flex items-center space-x-3">
-
-          {/* Quick Demo Market Session Override */}
-          <div className="relative">
-            <button
-              onClick={() => setShowOverrideMenu(!showOverrideMenu)}
-              className="px-2.5 py-1.5 bg-fintech-panel hover:bg-fintech-hover border border-fintech-border rounded text-xs font-mono text-zinc-300 flex items-center space-x-1.5 transition-colors"
-              title="Toggle Simulated Market Hours for instant order execution testing"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-zinc-400" />
-              <span className="hidden sm:inline">Session:</span>
-              <span className={marketStatus?.isOverridden ? 'text-amber-400 font-semibold' : 'text-zinc-400'}>
-                {marketStatus?.isOverridden ? `Simulated ${marketStatus.overrideStatus}` : 'Auto (SLT)'}
-              </span>
-              <ChevronDown className="w-3 h-3 text-zinc-500" />
-            </button>
-
-            {showOverrideMenu && (
-              <div className="absolute right-0 mt-2 w-64 bg-fintech-panel border border-fintech-border rounded-lg shadow-2xl p-3 z-50 text-xs font-sans">
-                <div className="font-semibold text-zinc-200 mb-1 flex items-center justify-between">
-                  <span>Market Hours Control</span>
-                  <span className="text-[10px] text-zinc-400">Demo Testing</span>
-                </div>
-                <p className="text-[11px] text-zinc-400 mb-3">
-                  Standard CSE regular hours: 9:30 AM – 2:30 PM SLT. You can override to test QUEUED order execution.
-                </p>
-
-                <div className="space-y-1.5">
-                  <button
-                    onClick={() => {
-                      toggleMarketSessionOverride(true, true);
-                      setShowOverrideMenu(false);
-                    }}
-                    className="w-full text-left px-2.5 py-1.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 flex items-center justify-between transition-colors"
-                  >
-                    <span className="flex items-center space-x-1.5">
-                      <Play className="w-3.5 h-3.5" />
-                      <span>Simulate Market OPEN</span>
-                    </span>
-                    <span className="text-[10px] text-emerald-400">Executes queued</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      toggleMarketSessionOverride(false, true);
-                      setShowOverrideMenu(false);
-                    }}
-                    className="w-full text-left px-2.5 py-1.5 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 flex items-center justify-between transition-colors"
-                  >
-                    <span className="flex items-center space-x-1.5">
-                      <Pause className="w-3.5 h-3.5" />
-                      <span>Simulate Market CLOSED</span>
-                    </span>
-                    <span className="text-[10px] text-rose-400">Forces queueing</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      toggleMarketSessionOverride(false, false);
-                      setShowOverrideMenu(false);
-                    }}
-                    className="w-full text-left px-2.5 py-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 flex items-center justify-between transition-colors"
-                  >
-                    <span>Reset to Real SLT Clock</span>
-                    <span className="text-[10px] text-zinc-400">Default</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* User Profile / Auth State */}
           {user ? (
-            <div className="flex items-center space-x-3">
+            <>
               <div className="hidden sm:block text-right">
                 <div className="text-xs font-semibold text-zinc-200 flex items-center justify-end space-x-1.5">
                   <span>{user.username}</span>
@@ -288,7 +212,7 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
               >
                 <LogOut className="w-4 h-4" />
               </button>
-            </div>
+            </>
           ) : (
             <button
               onClick={onOpenAuth}

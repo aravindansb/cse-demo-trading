@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
+import { useMarket } from '../../context/SocketContext';
 import { formatLKR, formatNumber } from '../../lib/utils';
 import api from '../../lib/api';
 import {
@@ -23,7 +24,10 @@ import {
   ArrowRight,
   Sparkles,
   BarChart3,
-  CheckCircle2
+  CheckCircle2,
+  Play,
+  Pause,
+  SlidersHorizontal
 } from 'lucide-react';
 import { TrademarkBadge } from '../../components/TrademarkBadge';
 
@@ -36,6 +40,26 @@ export default function SuperUserCommandCenterPage() {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const { marketStatus, toggleMarketSessionOverride } = useMarket();
+  const [sessionActionLoading, setSessionActionLoading] = useState<boolean>(false);
+  const [sessionFeedback, setSessionFeedback] = useState<string | null>(null);
+
+  const handleSessionOverride = async (isOpen: boolean, isOverrideActive: boolean) => {
+    try {
+      setSessionActionLoading(true);
+      await toggleMarketSessionOverride(isOpen, isOverrideActive);
+      setSessionFeedback(
+        isOverrideActive
+          ? `Market session forced to ${isOpen ? 'OPEN' : 'CLOSED'} (Simulated)`
+          : 'Market restored to real Sri Lanka Standard Time schedule'
+      );
+      setTimeout(() => setSessionFeedback(null), 4000);
+    } catch (err: any) {
+      setSessionFeedback('Failed to update market session');
+    } finally {
+      setSessionActionLoading(false);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     if (!user || user.role !== 'SUPER_ADMIN') return;
@@ -148,6 +172,98 @@ export default function SuperUserCommandCenterPage() {
 
             <TrademarkBadge size="sm" className="hidden sm:inline-flex" />
           </div>
+        </div>
+      </div>
+
+      {/* Super Admin Exclusive: Market Session Simulator & Engine Control */}
+      <div className="bg-[#0B0F19] border border-purple-500/40 rounded-xl p-5 shadow-xl relative overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center space-x-2">
+              <SlidersHorizontal className="w-4 h-4 text-purple-400" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-100 font-mono flex items-center space-x-2">
+                <span>Market Session Control</span>
+                <span className="px-2 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                  SUPER ADMIN EXCLUSIVE
+                </span>
+              </h2>
+            </div>
+            <p className="text-xs text-zinc-400">
+              Regular CSE trading is 09:30 – 14:30 SLT. Override the session here to simulate execution of queued market/limit orders anytime.
+            </p>
+          </div>
+
+          {/* Current Market State Badge */}
+          <div className="flex items-center space-x-3">
+            <div className="text-left md:text-right">
+              <div className="text-[11px] text-zinc-400 font-mono">Current Engine State</div>
+              <div className="text-sm font-bold font-mono flex items-center md:justify-end space-x-2 mt-0.5">
+                <span className={`inline-block w-2.5 h-2.5 rounded-full ${marketStatus?.isOpen ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
+                <span className={marketStatus?.isOpen ? 'text-emerald-400' : 'text-rose-400'}>
+                  {marketStatus?.isOpen ? 'MARKET OPEN' : 'MARKET CLOSED'}
+                </span>
+                <span className="text-xs text-zinc-400 font-normal">
+                  ({marketStatus?.isOverridden ? `Simulated ${marketStatus.overrideStatus}` : 'Auto SLT Clock'})
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Controls */}
+        <div className="mt-4 pt-4 border-t border-fintech-border/60 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={() => handleSessionOverride(true, true)}
+              disabled={sessionActionLoading}
+              className={`px-3 py-2 rounded-lg text-xs font-mono font-bold flex items-center space-x-2 transition-all shadow-sm ${
+                marketStatus?.isOverridden && marketStatus?.overrideStatus === 'OPEN'
+                  ? 'bg-emerald-500 text-black shadow-emerald-500/20 ring-2 ring-emerald-400'
+                  : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40'
+              }`}
+              title="Force session OPEN: triggers processing of all queued orders"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>Simulate Market OPEN</span>
+              <span className="text-[10px] opacity-80">(Executes Queued)</span>
+            </button>
+
+            <button
+              onClick={() => handleSessionOverride(false, true)}
+              disabled={sessionActionLoading}
+              className={`px-3 py-2 rounded-lg text-xs font-mono font-bold flex items-center space-x-2 transition-all shadow-sm ${
+                marketStatus?.isOverridden && marketStatus?.overrideStatus === 'CLOSED'
+                  ? 'bg-rose-500 text-white shadow-rose-500/20 ring-2 ring-rose-400'
+                  : 'bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/40'
+              }`}
+              title="Force session CLOSED: causes new retail orders to be queued"
+            >
+              <Pause className="w-3.5 h-3.5 fill-current" />
+              <span>Simulate Market CLOSED</span>
+              <span className="text-[10px] opacity-80">(Forces Queueing)</span>
+            </button>
+
+            <button
+              onClick={() => handleSessionOverride(false, false)}
+              disabled={sessionActionLoading}
+              className={`px-3 py-2 rounded-lg text-xs font-mono font-bold flex items-center space-x-2 transition-all ${
+                !marketStatus?.isOverridden
+                  ? 'bg-zinc-800 text-zinc-100 border border-zinc-600'
+                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+              }`}
+              title="Restore standard Sri Lanka Standard Time matching schedule (9:30 AM - 2:30 PM)"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${sessionActionLoading ? 'animate-spin' : ''}`} />
+              <span>Restore Real SLT Clock</span>
+            </button>
+          </div>
+
+          {sessionFeedback && (
+            <div className="text-xs font-mono font-semibold text-purple-300 bg-purple-950/70 border border-purple-500/40 px-3 py-1.5 rounded-lg flex items-center space-x-1.5 animate-pulse">
+              <CheckCircle2 className="w-3.5 h-3.5 text-purple-400" />
+              <span>{sessionFeedback}</span>
+            </div>
+          )}
         </div>
       </div>
 
