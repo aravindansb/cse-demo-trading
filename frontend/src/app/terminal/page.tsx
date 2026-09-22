@@ -10,11 +10,13 @@ import { HoldingsTable } from '../../components/HoldingsTable';
 import { OrdersTable } from '../../components/OrdersTable';
 import { AuthModal } from '../../components/AuthModal';
 import api from '../../lib/api';
+import { useMarket } from '../../context/SocketContext';
 import { Trophy, ChevronRight } from 'lucide-react';
 import { formatPercent } from '../../lib/utils';
 
 export default function TerminalPage() {
   const { user } = useAuth();
+  const { orderRefreshTick } = useMarket();
   const [portfolio, setPortfolio] = useState<any>(null);
   const [rankSummary, setRankSummary] = useState<any>(null);
   const [isLoadingPortfolio, setIsLoadingPortfolio] = useState(false);
@@ -50,7 +52,7 @@ export default function TerminalPage() {
   useEffect(() => {
     fetchPortfolio();
     fetchRankSummary();
-  }, [user, refreshTrigger]);
+  }, [user, refreshTrigger, orderRefreshTick]);
 
   const handleRefresh = () => {
     setRefreshTrigger((prev) => prev + 1);

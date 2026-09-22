@@ -53,6 +53,7 @@ interface SocketContextType {
   toggleMarketSessionOverride: (isOpen: boolean, isOverrideActive: boolean) => Promise<void>;
   lastExecutionNotification: string | null;
   clearNotification: () => void;
+  orderRefreshTick: number;
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
@@ -66,6 +67,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [marketStatus, setMarketStatus] = useState<MarketStatus | null>(null);
   const [tickFlashes, setTickFlashes] = useState<Record<string, 'up' | 'down'>>({});
   const [lastExecutionNotification, setLastExecutionNotification] = useState<string | null>(null);
+  const [orderRefreshTick, setOrderRefreshTick] = useState<number>(0);
   const [isSyncingCse, setIsSyncingCse] = useState(false);
 
   const fetchInitialData = async () => {
@@ -196,6 +198,16 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     s.on('order:executed', (data: { order: any; message: string }) => {
       setLastExecutionNotification(data.message);
+      setOrderRefreshTick((prev) => prev + 1);
+    });
+
+    s.on('order:activated', (data: { order: any; message: string }) => {
+      setLastExecutionNotification(data.message);
+      setOrderRefreshTick((prev) => prev + 1);
+    });
+
+    s.on('market:orders-updated', () => {
+      setOrderRefreshTick((prev) => prev + 1);
     });
 
     return () => {
@@ -220,6 +232,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         toggleMarketSessionOverride,
         lastExecutionNotification,
         clearNotification: () => setLastExecutionNotification(null),
+        orderRefreshTick,
       }}
     >
       {children}

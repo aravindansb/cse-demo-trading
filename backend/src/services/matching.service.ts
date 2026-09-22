@@ -329,24 +329,30 @@ export class MatchingService {
         if (order.orderType === 'MARKET') {
           const executed = await this.executeOrder(order.id, ticker.lastTradedPrice);
           results.push(executed);
-        } else if (order.orderType === 'LIMIT' && order.targetLimitPrice) {
-          const canExecute =
-            (order.side === 'BUY' && ticker.lastTradedPrice <= order.targetLimitPrice) ||
-            (order.side === 'SELL' && ticker.lastTradedPrice >= order.targetLimitPrice);
+        } else if (order.orderType === 'LIMIT') {
+          if (order.targetLimitPrice) {
+            const canExecute =
+              (order.side === 'BUY' && ticker.lastTradedPrice <= order.targetLimitPrice) ||
+              (order.side === 'SELL' && ticker.lastTradedPrice >= order.targetLimitPrice);
 
-          if (canExecute) {
+            if (canExecute) {
+              const executed = await this.executeOrder(order.id, ticker.lastTradedPrice);
+              results.push(executed);
+            } else {
+              // Transition from QUEUED to PENDING in order book
+              const updated = await prisma.order.update({
+                where: { id: order.id },
+                data: {
+                  status: 'PENDING',
+                  notes: `Market opened. Order placed in active book at limit Rs. ${order.targetLimitPrice.toFixed(2)}.`
+                }
+              });
+              results.push(updated);
+            }
+          } else {
+            // Limit order without limit price: execute at market price
             const executed = await this.executeOrder(order.id, ticker.lastTradedPrice);
             results.push(executed);
-          } else {
-            // Transition from QUEUED to PENDING in order book
-            const updated = await prisma.order.update({
-              where: { id: order.id },
-              data: {
-                status: 'PENDING',
-                notes: `Market opened. Order placed in book at limit Rs. ${order.targetLimitPrice.toFixed(2)}.`
-              }
-            });
-            results.push(updated);
           }
         }
       } catch (err) {

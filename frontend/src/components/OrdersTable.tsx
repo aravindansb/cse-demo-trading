@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { formatLKR, formatNumber } from '../lib/utils';
 import api from '../lib/api';
 import { Clock, CheckCircle, XCircle, AlertCircle, Trash2, RefreshCw } from 'lucide-react';
+import { useMarket } from '../context/SocketContext';
 
 interface OrderItem {
   id: string;
@@ -44,6 +45,7 @@ export const OrdersTable: React.FC<{ refreshTrigger?: number; onOrderCancelled?:
   const [trades, setTrades] = useState<TradeItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const { orderRefreshTick } = useMarket();
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -63,7 +65,7 @@ export const OrdersTable: React.FC<{ refreshTrigger?: number; onOrderCancelled?:
 
   useEffect(() => {
     fetchData();
-  }, [refreshTrigger]);
+  }, [refreshTrigger, orderRefreshTick]);
 
   const handleCancelOrder = async (orderId: string) => {
     setCancellingId(orderId);
