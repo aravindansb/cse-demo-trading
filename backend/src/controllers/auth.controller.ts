@@ -56,6 +56,28 @@ export class AuthController {
     }
   }
 
+  public static async changePassword(req: AuthRequest, res: Response) {
+    try {
+      if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+      const { currentPassword, newPassword } = req.body;
+      const result = await AuthService.changePassword(req.user.id, currentPassword, newPassword);
+      return res.status(200).json(result);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to change password' });
+    }
+  }
+
+  public static async changePin(req: AuthRequest, res: Response) {
+    try {
+      if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+      const { currentCredential, newPin } = req.body;
+      const result = await AuthService.changePin(req.user.id, currentCredential, newPin);
+      return res.status(200).json(result);
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message || 'Failed to change Security PIN' });
+    }
+  }
+
   public static async adminResetPassword(req: AuthRequest, res: Response) {
     try {
       if (!req.user || (req.user.role !== 'ADMIN' && req.user.role !== 'SUPER_ADMIN')) {

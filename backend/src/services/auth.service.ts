@@ -307,6 +307,86 @@ export class AuthService {
   }
 
   /**
+   * Authenticated User: Change Password
+   */
+  public static async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    if (!currentPassword || !newPassword) {
+      throw new Error('Current password and new password are required');
+    }
+
+    if (newPassword.length < 6) {
+      throw new Error('New password must be at least 6 characters long');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      throw new Error('User account not found');
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+      throw new Error('Incorrect current password');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash }
+    });
+
+    return { success: true, message: 'Password updated successfully' };
+  }
+
+  /**
+   * Authenticated User: Change 4-digit Security PIN
+   */
+  public static async changePin(userId: string, currentCredential: string, newPin: string) {
+    if (!currentCredential || !newPin) {
+      throw new Error('Current password or PIN, and new 4-digit PIN are required');
+    }
+
+    const cleanNewPin = newPin.trim();
+    if (!/^\d{4}$/.test(cleanNewPin)) {
+      throw new Error('New Security PIN must be exactly 4 digits');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      throw new Error('User account not found');
+    }
+
+    // Verify current credential (can match current password OR current PIN)
+    let isCredentialValid = await bcrypt.compare(currentCredential, user.passwordHash);
+    if (!isCredentialValid && user.securityPinHash) {
+      isCredentialValid = await bcrypt.compare(currentCredential.trim(), user.securityPinHash);
+    } else if (!isCredentialValid && !user.securityPinHash && currentCredential.trim() === '1234') {
+      isCredentialValid = true;
+    }
+
+    if (!isCredentialValid) {
+      throw new Error('Incorrect current password or PIN');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const securityPinHash = await bcrypt.hash(cleanNewPin, salt);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { securityPinHash }
+    });
+
+    return { success: true, message: 'Security PIN updated successfully' };
+  }
+
+  /**
    * Admin Action: Reset user password to default 'Password123!'
    */
   public static async adminResetPassword(targetUserId: string) {

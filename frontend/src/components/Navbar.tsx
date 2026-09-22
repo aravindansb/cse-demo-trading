@@ -18,13 +18,16 @@ import {
   CheckCircle2,
   FileText,
   Trophy,
-  Activity
+  Activity,
+  KeyRound
 } from 'lucide-react';
+import { UserSecurityModal } from './UserSecurityModal';
 
 export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { indices, marketStatus, syncCseData, isSyncingCse } = useMarket();
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
 
   return (
     <header className="border-b border-fintech-border bg-fintech-card sticky top-0 z-40">
@@ -205,6 +208,15 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
                 </div>
               </div>
 
+              {/* Change Password & PIN Security Settings */}
+              <button
+                onClick={() => setIsSecurityModalOpen(true)}
+                className="p-1.5 text-zinc-400 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors"
+                title="Change Password & Security PIN"
+              >
+                <KeyRound className="w-4 h-4" />
+              </button>
+
               <button
                 onClick={logout}
                 className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors"
@@ -224,6 +236,12 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
           )}
         </div>
       </div>
+
+      {/* Authenticated Change Password & PIN Modal */}
+      <UserSecurityModal
+        isOpen={isSecurityModalOpen}
+        onClose={() => setIsSecurityModalOpen(false)}
+      />
     </header>
   );
 };
