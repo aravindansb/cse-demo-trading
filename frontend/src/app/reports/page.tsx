@@ -27,6 +27,8 @@ function ReportsContent() {
 
   const { user, isLoading: authLoading } = useAuth();
   const isAuthenticated = !!user;
+  const isAdminOrSuper = Boolean(user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN'));
+  const effectiveTargetUserId = (targetUserId && isAdminOrSuper) ? targetUserId : '';
 
   const [activeTab, setActiveTab] = useState<'cds' | 'contract-notes' | 'pnl' | 'ledger'>(initialTab);
   const [loadedTab, setLoadedTab] = useState<string>('');
@@ -57,7 +59,7 @@ function ReportsContent() {
       if (filter.startDate) params.append('startDate', filter.startDate);
       if (filter.endDate) params.append('endDate', filter.endDate);
       if (filter.ticker) params.append('ticker', filter.ticker);
-      if (targetUserId) params.append('userId', targetUserId);
+      if (effectiveTargetUserId) params.append('userId', effectiveTargetUserId);
 
       const qs = params.toString() ? `?${params.toString()}` : '';
 
@@ -119,7 +121,7 @@ function ReportsContent() {
               <h1 className="text-lg font-bold text-zinc-100 tracking-wide">
                 PORTFOLIO REPORTS & STATEMENTS
               </h1>
-              {targetUserId && (
+              {effectiveTargetUserId && (
                 <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center space-x-1">
                   <UserCheck className="w-3 h-3" />
                   <span>Admin Auditing Mode</span>

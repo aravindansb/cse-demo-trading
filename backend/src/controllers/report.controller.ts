@@ -4,8 +4,17 @@ import { ReportService } from '../services/report.service';
 export class ReportController {
   private static getTargetUserId(req: Request): string {
     const authUser = (req as any).user;
-    if (authUser.role === 'ADMIN' && req.query.userId) {
-      return req.query.userId as string;
+    if (!authUser) {
+      throw new Error('Unauthorized');
+    }
+    const requestedUserId = req.query.userId as string | undefined;
+    if (requestedUserId && requestedUserId !== authUser.id) {
+      if (authUser.role !== 'ADMIN' && authUser.role !== 'SUPER_ADMIN') {
+        const error: any = new Error('Access denied: Auditing other traders is restricted to Admin and Super Admin accounts.');
+        error.statusCode = 403;
+        throw error;
+      }
+      return requestedUserId;
     }
     return authUser.id;
   }
@@ -24,7 +33,8 @@ export class ReportController {
       res.status(200).json({ success: true, data: statement });
     } catch (err: any) {
       console.error('[REPORT CONTROLLER] getCdsStatement error:', err);
-      res.status(400).json({ success: false, error: err.message });
+      const status = err.statusCode || 400;
+      res.status(status).json({ success: false, error: err.message });
     }
   }
 
@@ -44,7 +54,8 @@ export class ReportController {
       res.status(200).json({ success: true, data: notes });
     } catch (err: any) {
       console.error('[REPORT CONTROLLER] getContractNotes error:', err);
-      res.status(400).json({ success: false, error: err.message });
+      const status = err.statusCode || 400;
+      res.status(status).json({ success: false, error: err.message });
     }
   }
 
@@ -53,9 +64,10 @@ export class ReportController {
       const authUser = (req as any).user;
       const { tradeId } = req.params;
 
+      const isAdminOrSuper = authUser.role === 'ADMIN' || authUser.role === 'SUPER_ADMIN';
       const note = await ReportService.getSingleContractNote(
         tradeId,
-        authUser.role === 'ADMIN' ? undefined : authUser.id
+        isAdminOrSuper ? undefined : authUser.id
       );
 
       res.status(200).json({ success: true, data: note });
@@ -79,7 +91,8 @@ export class ReportController {
       res.status(200).json({ success: true, data: pnlReport });
     } catch (err: any) {
       console.error('[REPORT CONTROLLER] getCapitalGains error:', err);
-      res.status(400).json({ success: false, error: err.message });
+      const status = err.statusCode || 400;
+      res.status(status).json({ success: false, error: err.message });
     }
   }
 
@@ -97,7 +110,8 @@ export class ReportController {
       res.status(200).json({ success: true, data: ledger });
     } catch (err: any) {
       console.error('[REPORT CONTROLLER] getCashLedger error:', err);
-      res.status(400).json({ success: false, error: err.message });
+      const status = err.statusCode || 400;
+      res.status(status).json({ success: false, error: err.message });
     }
   }
 }

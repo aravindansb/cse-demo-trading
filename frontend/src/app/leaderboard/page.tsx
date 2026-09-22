@@ -29,6 +29,7 @@ import { TrademarkBadge } from '../../components/TrademarkBadge';
 
 export default function LeaderboardPage() {
   const { user } = useAuth();
+  const isAdminOrSuperAdmin = Boolean(user && (user.role === 'ADMIN' || user.role === 'SUPER_ADMIN'));
   const [activeTab, setActiveTab] = useState<'rankings' | 'tournaments' | 'hall-of-fame' | 'badges'>('rankings');
   const [timeframe, setTimeframe] = useState<'all' | 'month' | 'week'>('all');
 
@@ -406,19 +407,21 @@ export default function LeaderboardPage() {
                     <th className="py-2.5 px-3 text-center">Win Rate</th>
                     <th className="py-2.5 px-3 text-center">Trades</th>
                     <th className="py-2.5 px-3">Badges & Titles</th>
-                    <th className="py-2.5 px-3 text-center">Audit</th>
+                    {isAdminOrSuperAdmin && (
+                      <th className="py-2.5 px-3 text-center">Audit</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-fintech-border/30 font-mono">
                   {isLoadingRankings ? (
                     <tr>
-                      <td colSpan={9} className="p-12 text-center text-zinc-400 font-sans text-xs animate-pulse">
+                      <td colSpan={isAdminOrSuperAdmin ? 9 : 8} className="p-12 text-center text-zinc-400 font-sans text-xs animate-pulse">
                         Calculating live mark-to-market portfolio returns...
                       </td>
                     </tr>
                   ) : rankings.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="p-8 text-center text-zinc-500 font-sans text-xs">
+                      <td colSpan={isAdminOrSuperAdmin ? 9 : 8} className="p-8 text-center text-zinc-500 font-sans text-xs">
                         No registered traders found.
                       </td>
                     </tr>
@@ -524,16 +527,18 @@ export default function LeaderboardPage() {
                             </div>
                           </td>
 
-                          <td className="py-3 px-3 text-center">
-                            <Link
-                              href={`/reports?userId=${trader.id}`}
-                              className="px-2 py-1 rounded bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 text-blue-400 text-xs inline-flex items-center space-x-1 transition-colors"
-                              title="Audit verified CDS statement"
-                            >
-                              <FileText className="w-3 h-3" />
-                              <span>CDS</span>
-                            </Link>
-                          </td>
+                          {isAdminOrSuperAdmin && (
+                            <td className="py-3 px-3 text-center">
+                              <Link
+                                href={`/reports?userId=${trader.id}`}
+                                className="px-2 py-1 rounded bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 text-blue-400 text-xs inline-flex items-center space-x-1 transition-colors"
+                                title="Audit verified CDS statement"
+                              >
+                                <FileText className="w-3 h-3" />
+                                <span>CDS</span>
+                              </Link>
+                            </td>
+                          )}
                         </tr>
                       );
                     })
