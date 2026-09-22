@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { formatLKR, formatNumber } from '../lib/utils';
 import api from '../lib/api';
-import { Clock, CheckCircle, XCircle, AlertCircle, Trash2, RefreshCw } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, AlertCircle, Trash2, RefreshCw, User, Lock } from 'lucide-react';
 import { useMarket } from '../context/SocketContext';
+import { useAuth } from '../context/AuthContext';
 
 interface OrderItem {
   id: string;
@@ -40,6 +41,7 @@ export const OrdersTable: React.FC<{ refreshTrigger?: number; onOrderCancelled?:
   refreshTrigger,
   onOrderCancelled,
 }) => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'ALL' | 'TRADES'>('ACTIVE');
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [trades, setTrades] = useState<TradeItem[]>([]);
@@ -48,6 +50,7 @@ export const OrdersTable: React.FC<{ refreshTrigger?: number; onOrderCancelled?:
   const { orderRefreshTick } = useMarket();
 
   const fetchData = async () => {
+    if (!user) return;
     setIsLoading(true);
     try {
       const [ordersRes, tradesRes] = await Promise.all([
@@ -64,8 +67,13 @@ export const OrdersTable: React.FC<{ refreshTrigger?: number; onOrderCancelled?:
   };
 
   useEffect(() => {
-    fetchData();
-  }, [refreshTrigger, orderRefreshTick]);
+    if (user) {
+      fetchData();
+    } else {
+      setOrders([]);
+      setTrades([]);
+    }
+  }, [user, refreshTrigger, orderRefreshTick]);
 
   const handleCancelOrder = async (orderId: string) => {
     setCancellingId(orderId);
@@ -79,6 +87,20 @@ export const OrdersTable: React.FC<{ refreshTrigger?: number; onOrderCancelled?:
       setCancellingId(null);
     }
   };
+
+  if (!user) {
+    return (
+      <div className="bg-fintech-card border border-fintech-border rounded-lg p-8 text-center flex flex-col items-center justify-center space-y-3">
+        <div className="w-10 h-10 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-1">
+          <Lock className="w-5 h-5" />
+        </div>
+        <div className="text-zinc-200 font-semibold text-sm">User-Specific Order Ledger</div>
+        <p className="text-xs text-zinc-400 max-w-sm">
+          Orders and trade executions are strictly isolated per account. Sign in to your account to view your private active orders, queued market opening orders, and completed trade history.
+        </p>
+      </div>
+    );
+  }
 
   const activeOrders = orders.filter((o) => o.status === 'QUEUED' || o.status === 'PENDING');
   const displayedOrders = activeTab === 'ACTIVE' ? activeOrders : orders;
@@ -120,13 +142,19 @@ export const OrdersTable: React.FC<{ refreshTrigger?: number; onOrderCancelled?:
           </button>
         </div>
 
-        <button
-          onClick={fetchData}
-          className="p-1.5 text-zinc-400 hover:text-zinc-200 rounded hover:bg-fintech-hover transition-colors"
-          title="Refresh table"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center space-x-3">
+          <span className="hidden sm:inline-flex items-center space-x-1.5 text-[11px] text-zinc-400 bg-fintech-panel px-2.5 py-1 rounded border border-fintech-border font-mono">
+            <User className="w-3 h-3 text-blue-400" />
+            <span>{user.username}</span>
+          </span>
+          <button
+            onClick={fetchData}
+            className="p-1.5 text-zinc-400 hover:text-zinc-200 rounded hover:bg-fintech-hover transition-colors"
+            title="Refresh table"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {/* Orders View */}

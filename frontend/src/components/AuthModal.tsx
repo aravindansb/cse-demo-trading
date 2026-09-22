@@ -60,31 +60,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleQuickDemo = async () => {
-    setError(null);
-    setSuccessMsg(null);
-    setIsLoading(true);
-    const demoUser = 'trader_cse';
-    const demoEmail = 'trader@cse-demo.lk';
-    const demoPass = 'DemoPass123!';
-
-    try {
-      // Try login first
-      await login(demoEmail, demoPass);
-      onClose();
-    } catch {
-      // If doesn't exist, create it with default PIN 1234
-      try {
-        await register(demoUser, demoEmail, demoPass, '1234', 'USER');
-        onClose();
-      } catch (err: any) {
-        setError(err.response?.data?.error || err.message || 'Failed to initialize demo account');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="bg-fintech-card border border-fintech-border rounded-xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
@@ -238,20 +213,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               className="text-blue-400 hover:text-blue-300 font-semibold underline ml-1"
             >
               {authMode === 'REGISTER' ? 'Sign In' : 'Register Now'}
-            </button>
-          </div>
-
-          {/* Instant 1-Click Demo Buttons (Shown on Login and Register) */}
-          <div className="pt-3 border-t border-fintech-border">
-            <div className="text-[11px] text-zinc-500 text-center mb-2">Or test instantly with 1-click demo account:</div>
-            <button
-              type="button"
-              onClick={handleQuickDemo}
-              disabled={isLoading}
-              className="w-full py-2 px-3 bg-fintech-panel hover:bg-fintech-hover border border-fintech-border rounded-lg text-xs font-semibold text-zinc-200 hover:text-white transition-colors flex items-center justify-center space-x-2 shadow-sm"
-            >
-              <User className="w-3.5 h-3.5 text-blue-400" />
-              <span>1-Click Demo Trader (Rs. 1M Capital)</span>
             </button>
           </div>
 
