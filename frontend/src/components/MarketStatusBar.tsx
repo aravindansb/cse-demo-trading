@@ -2,10 +2,10 @@
 
 import React from 'react';
 import { useMarket } from '../context/SocketContext';
-import { Clock, AlertCircle, CheckCircle2, Zap, Play, Pause, RotateCcw, RefreshCw, Globe } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
 export const MarketStatusBar: React.FC = () => {
-  const { marketStatus, simulateTick, toggleMarketSessionOverride, syncCseData, isSyncingCse, tickers } = useMarket();
+  const { marketStatus, syncCseData, isSyncingCse, tickers } = useMarket();
 
   if (!marketStatus) return null;
 
@@ -37,63 +37,24 @@ export const MarketStatusBar: React.FC = () => {
               {tickers.length} CSE Equities Active
             </span>
             {marketStatus.isOverridden && (
-              <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-500/20 text-amber-400 font-mono border border-amber-500/30">
-                OVERRIDE ACTIVE
+              <span className="px-1.5 py-0.2 rounded text-[10px] bg-purple-500/20 text-purple-300 font-mono border border-purple-500/30">
+                SUPER ADMIN OVERRIDE ({marketStatus.overrideStatus})
               </span>
             )}
           </div>
         </div>
 
-        {/* Right: Quick sync and simulation triggers */}
+        {/* Right: CSE Live Sync */}
         <div className="flex items-center space-x-2 text-xs">
           <button
             onClick={syncCseData}
             disabled={isSyncingCse}
             className="px-2.5 py-1 rounded bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/30 text-blue-300 flex items-center space-x-1.5 transition-colors font-medium"
-            title="Sync all 285 CSE listed stocks & official index data"
+            title="Sync all 285 CSE listed stocks & official index data directly from CSE API"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCse ? 'animate-spin' : ''}`} />
             <span>{isSyncingCse ? 'Syncing CSE...' : 'Sync CSE Live'}</span>
           </button>
-
-          <button
-            onClick={simulateTick}
-            className="px-2.5 py-1 rounded bg-fintech-panel hover:bg-fintech-hover border border-fintech-border text-zinc-300 hover:text-white flex items-center space-x-1.5 transition-colors"
-            title="Simulate instant price tick for active tickers"
-          >
-            <Zap className="w-3.5 h-3.5 text-amber-400" />
-            <span>Simulate Tick</span>
-          </button>
-
-          {marketStatus.isOpen ? (
-            <button
-              onClick={() => toggleMarketSessionOverride(false, true)}
-              className="px-2.5 py-1 rounded bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 flex items-center space-x-1.5 transition-colors"
-              title="Force simulate market closed to test QUEUED orders"
-            >
-              <Pause className="w-3.5 h-3.5" />
-              <span>Simulate Closed</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => toggleMarketSessionOverride(true, true)}
-              className="px-2.5 py-1 rounded bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center space-x-1.5 transition-colors"
-              title="Force simulate market open to test immediate matching & queued transitions"
-            >
-              <Play className="w-3.5 h-3.5" />
-              <span>Simulate Open</span>
-            </button>
-          )}
-
-          {marketStatus.isOverridden && (
-            <button
-              onClick={() => toggleMarketSessionOverride(false, false)}
-              className="p-1 rounded bg-fintech-panel hover:bg-fintech-hover border border-fintech-border text-zinc-400 hover:text-zinc-200"
-              title="Reset session to real Sri Lanka Standard Time clock"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
       </div>
     </div>
