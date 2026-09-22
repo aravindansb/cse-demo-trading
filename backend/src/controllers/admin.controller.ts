@@ -24,8 +24,8 @@ export class AdminController {
 
   public static async deleteTrader(req: AuthRequest, res: Response) {
     try {
-      if (!req.user || req.user.role !== 'ADMIN') {
-        return res.status(403).json({ error: 'Forbidden: Admin access required' });
+      if (!req.user || (req.user.role !== 'ADMIN' && req.user.role !== 'SUPER_ADMIN')) {
+        return res.status(403).json({ error: 'Forbidden: Administrator access required' });
       }
 
       const { userId } = req.params;
@@ -39,7 +39,33 @@ export class AdminController {
       return res.status(200).json(result);
     } catch (err: any) {
       const errMsg = err.message || 'Failed to delete trader account';
-      const statusCode = errMsg.includes('Forbidden') || errMsg.includes('Cannot delete')
+      const statusCode = errMsg.includes('Forbidden') || errMsg.includes('Cannot delete') || errMsg.includes('Only Super')
+        ? 403
+        : errMsg.includes('not found')
+        ? 404
+        : 400;
+      return res.status(statusCode).json({ error: errMsg });
+    }
+  }
+
+  public static async resetPortfolio(req: AuthRequest, res: Response) {
+    try {
+      if (!req.user || req.user.role !== 'SUPER_ADMIN') {
+        return res.status(403).json({ error: 'Forbidden: Super Administrator access required' });
+      }
+
+      const { userId } = req.params;
+      const { pin } = req.body;
+
+      if (!pin) {
+        return res.status(400).json({ error: 'Super Administrator 4-digit Security PIN is required' });
+      }
+
+      const result = await AdminService.resetPortfolio(req.user.id, userId, pin);
+      return res.status(200).json(result);
+    } catch (err: any) {
+      const errMsg = err.message || 'Failed to reset portfolio';
+      const statusCode = errMsg.includes('Forbidden')
         ? 403
         : errMsg.includes('not found')
         ? 404

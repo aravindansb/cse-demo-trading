@@ -12,6 +12,7 @@ router.use(requireAdmin as any);
 router.get('/metrics', AdminController.getMetrics as any);
 router.get('/traders/:userId', AdminController.inspectUser as any);
 router.delete('/traders/:userId', AdminController.deleteTrader as any);
+router.post('/traders/:userId/reset-portfolio', AdminController.resetPortfolio as any);
 router.post('/reset-password', AuthController.adminResetPassword as any);
 router.post('/reset-pin', AuthController.adminResetPin as any);
 router.post('/create-admin', AuthController.createAdminUser as any);

@@ -26,7 +26,8 @@ import {
   Trophy,
   Trash2,
   AlertTriangle,
-  UserPlus
+  UserPlus,
+  RotateCcw
 } from 'lucide-react';
 
 export default function AdminDashboardPage() {
@@ -130,6 +131,46 @@ export default function AdminDashboardPage() {
       setDeleteError(err.response?.data?.error || 'Failed to delete trader account.');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // Reset portfolio modal state (Super Admin exclusive)
+  const [resettingTrader, setResettingTrader] = useState<any>(null);
+  const [resetPin, setResetPin] = useState('');
+  const [isResettingPortfolio, setIsResettingPortfolio] = useState(false);
+  const [resetPortfolioError, setResetPortfolioError] = useState<string | null>(null);
+  const [resetSuccessToast, setResetSuccessToast] = useState<string | null>(null);
+
+  const handleResetPortfolioClick = (trader: any) => {
+    setResettingTrader(trader);
+    setResetPin('');
+    setResetPortfolioError(null);
+  };
+
+  const handleConfirmResetPortfolio = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resettingTrader) return;
+    if (!resetPin || resetPin.trim().length !== 4) {
+      setResetPortfolioError('Please enter your 4-digit Super Administrator Security PIN.');
+      return;
+    }
+    setIsResettingPortfolio(true);
+    setResetPortfolioError(null);
+    try {
+      const res = await api.post(`/admin/traders/${resettingTrader.id}/reset-portfolio`, {
+        pin: resetPin.trim()
+      });
+      setResetSuccessToast(res.data.message || `Portfolio for ${resettingTrader.username} successfully reset to Rs. 1,000,000.00.`);
+      setResettingTrader(null);
+      setResetPin('');
+      await fetchAdminData();
+      setTimeout(() => {
+        setResetSuccessToast(null);
+      }, 5000);
+    } catch (err: any) {
+      setResetPortfolioError(err.response?.data?.error || 'Failed to reset portfolio value.');
+    } finally {
+      setIsResettingPortfolio(false);
     }
   };
 
@@ -456,11 +497,42 @@ export default function AdminDashboardPage() {
                           <KeyRound className="w-3.5 h-3.5" />
                           <span>{isResetting === trader.id + '_pin' ? '...' : 'Reset PIN'}</span>
                         </button>
-                        {trader.role === 'ADMIN' || trader.role === 'SUPER_ADMIN' ? (
+                        {/* Reset Portfolio to Rs 1M (Super Admin Only) */}
+                        {user?.role === 'SUPER_ADMIN' && (
+                          <button
+                            onClick={() => handleResetPortfolioClick(trader)}
+                            className="px-2 py-1 rounded bg-purple-600/10 hover:bg-purple-600/20 border border-purple-500/30 text-purple-300 hover:text-purple-200 text-xs flex items-center space-x-1 transition-colors"
+                            title={`Reset portfolio of ${trader.username} to Rs. 1,000,000.00`}
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Reset Rs 1M</span>
+                          </button>
+                        )}
+
+                        {/* Account Deletion */}
+                        {trader.id === user?.id ? (
                           <button
                             disabled
                             className="px-2 py-1 rounded bg-zinc-800/40 border border-zinc-700/30 text-zinc-600 text-xs flex items-center space-x-1 cursor-not-allowed"
-                            title="Administrator accounts cannot be deleted"
+                            title="You cannot delete your own account"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Self</span>
+                          </button>
+                        ) : user?.role === 'SUPER_ADMIN' ? (
+                          <button
+                            onClick={() => handleDeleteTraderClick(trader)}
+                            className="px-2 py-1 rounded bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 text-red-400 hover:text-red-300 text-xs flex items-center space-x-1 transition-colors"
+                            title={`Permanently delete ${trader.role} account ${trader.username}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete</span>
+                          </button>
+                        ) : (trader.role === 'ADMIN' || trader.role === 'SUPER_ADMIN') ? (
+                          <button
+                            disabled
+                            className="px-2 py-1 rounded bg-zinc-800/40 border border-zinc-700/30 text-zinc-600 text-xs flex items-center space-x-1 cursor-not-allowed"
+                            title="Administrator accounts can only be deleted by Super Admins"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>Protected</span>
@@ -823,6 +895,149 @@ export default function AdminDashboardPage() {
           </div>
           <button
             onClick={() => setDeleteSuccessToast(null)}
+            className="p-1 text-zinc-400 hover:text-zinc-200 rounded transition-colors ml-2"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Reset Portfolio Modal (Super Admin Exclusive) */}
+      {resettingTrader && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-fintech-card border border-purple-500/40 rounded-xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-4 border-b border-fintech-border bg-[#0D131F] flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center border border-purple-500/30">
+                  <RotateCcw className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-zinc-100 flex items-center space-x-2">
+                    <span>Reset Portfolio to Initial Baseline</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      SUPER ADMIN
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">Restore starting capital to Rs. 1,000,000.00 LKR</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setResettingTrader(null); setResetPortfolioError(null); setResetPin(''); }}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-fintech-hover transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Notice Callout */}
+              <div className="bg-purple-950/20 border border-purple-500/30 rounded-lg p-3.5 flex items-start space-x-3 text-purple-200 text-xs">
+                <Sparkles className="w-5 h-5 flex-shrink-0 text-purple-400 mt-0.5" />
+                <div>
+                  <div className="font-semibold text-purple-200">Portfolio Reset Scope</div>
+                  <div className="text-[11px] text-zinc-300 mt-1 leading-relaxed">
+                    You are resetting the portfolio for <strong className="text-white font-mono">{resettingTrader.username}</strong> (<span className="text-zinc-400">{resettingTrader.email}</span>).
+                    This will set cash to <strong className="text-emerald-400 font-mono">Rs. 1,000,000.00</strong>, clear all open stock holdings, and cancel all queued or pending limit orders.
+                  </div>
+                </div>
+              </div>
+
+              {/* Position Breakdown */}
+              <div className="bg-[#0D131F] border border-fintech-border rounded-lg p-3.5 space-y-2.5 font-mono">
+                <div className="text-[10px] uppercase font-sans font-bold text-zinc-400 tracking-wider flex items-center justify-between">
+                  <span>Current Balances</span>
+                  <span className="text-zinc-500">Tier: {resettingTrader.role}</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="bg-fintech-panel/70 p-2.5 rounded border border-fintech-border/40">
+                    <div className="text-[10px] text-zinc-500 font-sans">Current Cash</div>
+                    <div className="font-bold text-zinc-200 mt-0.5">{formatLKR(resettingTrader.availableCash)}</div>
+                  </div>
+                  <div className="bg-fintech-panel/70 p-2.5 rounded border border-fintech-border/40">
+                    <div className="text-[10px] text-zinc-500 font-sans">Stock Valuation</div>
+                    <div className="font-bold text-zinc-200 mt-0.5">{formatLKR(resettingTrader.stockValue)}</div>
+                  </div>
+                  <div className="bg-fintech-panel/70 p-2.5 rounded border border-fintech-border/40">
+                    <div className="text-[10px] text-zinc-500 font-sans">New Baseline</div>
+                    <div className="font-bold text-emerald-400 mt-0.5">Rs. 1,000,000.00</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Error banner */}
+              {resetPortfolioError && (
+                <div className="p-3 bg-red-950/40 border border-red-500/50 rounded-lg text-xs text-red-300 font-mono">
+                  ⚠️ {resetPortfolioError}
+                </div>
+              )}
+
+              {/* PIN Input & Form */}
+              <form onSubmit={handleConfirmResetPortfolio} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-300 mb-1">
+                    Super Admin Security PIN Authorization
+                  </label>
+                  <p className="text-[11px] text-zinc-500 mb-2">
+                    Enter your 4-digit Super Administrator PIN to authorize this reset:
+                  </p>
+                  <div className="relative max-w-xs">
+                    <input
+                      type="password"
+                      maxLength={4}
+                      autoFocus
+                      placeholder="• • • •"
+                      value={resetPin}
+                      onChange={(e) => setResetPin(e.target.value.replace(/\D/g, ''))}
+                      className="w-full bg-[#0B0F17] border border-fintech-border focus:border-purple-500 rounded-lg py-2 px-3 text-center text-lg tracking-[0.4em] font-mono text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    />
+                    <KeyRound className="w-4 h-4 text-zinc-500 absolute right-3 top-3 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-fintech-border flex items-center justify-between">
+                  <span className="text-[10px] text-zinc-500 font-mono">⚡ Powered by Aravinda™</span>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => { setResettingTrader(null); setResetPortfolioError(null); setResetPin(''); }}
+                      className="px-3 py-1.5 rounded-lg border border-fintech-border text-xs text-zinc-400 hover:text-zinc-200 hover:bg-fintech-hover transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={resetPin.length !== 4 || isResettingPortfolio}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 ${
+                        resetPin.length === 4 && !isResettingPortfolio
+                          ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-900/30 cursor-pointer'
+                          : 'bg-purple-950/40 text-zinc-500 border border-purple-900/40 cursor-not-allowed'
+                      }`}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>{isResettingPortfolio ? 'Resetting Portfolio...' : 'Reset to Rs. 1,000,000.00'}</span>
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Portfolio Success Toast */}
+      {resetSuccessToast && (
+        <div className="fixed bottom-6 right-6 z-50 p-4 bg-zinc-900/95 backdrop-blur-md border border-emerald-500/40 rounded-xl shadow-2xl flex items-center space-x-3 text-xs animate-in slide-in-from-bottom-5 duration-200">
+          <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm">
+            <RotateCcw className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="font-semibold text-zinc-100">Portfolio Reset Complete</div>
+            <div className="text-zinc-400 mt-0.5">{resetSuccessToast}</div>
+          </div>
+          <button
+            onClick={() => setResetSuccessToast(null)}
             className="p-1 text-zinc-400 hover:text-zinc-200 rounded transition-colors ml-2"
           >
             <X className="w-4 h-4" />

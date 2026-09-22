@@ -164,13 +164,15 @@ export class AdminService {
       throw new Error('Target trader account not found');
     }
 
-    // Admin protection
-    if (targetUser.role === 'ADMIN' || targetUser.role === 'SUPER_ADMIN') {
-      throw new Error('Cannot delete administrator accounts');
+    // Admin protection: Super Admins can delete other Admins and Super Admins, but no one can delete their own account
+    if (targetUser.id === adminUserId) {
+      throw new Error('Cannot delete your own account');
     }
 
-    if (targetUser.id === adminUserId) {
-      throw new Error('Cannot delete your own administrator account');
+    if (targetUser.role === 'ADMIN' || targetUser.role === 'SUPER_ADMIN') {
+      if (admin.role !== 'SUPER_ADMIN') {
+        throw new Error('Only Super Administrators can delete administrator or super administrator accounts');
+      }
     }
 
     // Execute atomic cascading deletion
@@ -188,9 +190,90 @@ export class AdminService {
       deletedUser: {
         id: targetUser.id,
         username: targetUser.username,
-        email: targetUser.email
+        email: targetUser.email,
+        role: targetUser.role
       },
-      message: `Trader ${targetUser.username} has been permanently deleted.`
+      message: `${targetUser.role === 'SUPER_ADMIN' ? 'Super Admin' : targetUser.role === 'ADMIN' ? 'Admin' : 'Trader'} ${targetUser.username} has been permanently deleted.`
+    };
+  }
+
+  /**
+   * Reset target user's portfolio back to initial starting state:
+   * Cash = Rs. 1,000,000.00, Locked Cash = 0, Holdings cleared, Queued/Pending orders cancelled.
+   * Super Admin authorization with 4-digit PIN required.
+   */
+  public static async resetPortfolio(superAdminUserId: string, targetUserId: string, pin: string) {
+    if (!pin || !/^\d{4}$/.test(pin.trim())) {
+      throw new Error('Valid 4-digit Security PIN is required');
+    }
+
+    const superAdmin = await prisma.user.findUnique({
+      where: { id: superAdminUserId }
+    });
+
+    if (!superAdmin || superAdmin.role !== 'SUPER_ADMIN') {
+      throw new Error('Forbidden: Super Administrator credentials required');
+    }
+
+    // Verify PIN
+    let isPinValid = false;
+    const cleanPin = pin.trim();
+    if (superAdmin.securityPinHash) {
+      isPinValid = await bcrypt.compare(cleanPin, superAdmin.securityPinHash);
+    } else if (cleanPin === '1234') {
+      isPinValid = true;
+    }
+
+    if (!isPinValid) {
+      throw new Error('Invalid Super Administrator Security PIN');
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: { wallet: true }
+    });
+
+    if (!targetUser) {
+      throw new Error('Target trader account not found');
+    }
+
+    // Atomic reset
+    await prisma.$transaction([
+      // 1. Clear all active holdings
+      prisma.holding.deleteMany({
+        where: { userId: targetUserId }
+      }),
+
+      // 2. Cancel all queued and pending orders
+      prisma.order.updateMany({
+        where: {
+          userId: targetUserId,
+          status: { in: ['QUEUED', 'PENDING'] }
+        },
+        data: {
+          status: 'CANCELLED',
+          notes: 'Cancelled by Super Administrator portfolio reset'
+        }
+      }),
+
+      // 3. Reset wallet to exact Rs. 1,000,000.00 starting cash
+      prisma.wallet.upsert({
+        where: { userId: targetUserId },
+        update: {
+          balance: 1000000.0,
+          lockedBalance: 0.0
+        },
+        create: {
+          userId: targetUserId,
+          balance: 1000000.0,
+          lockedBalance: 0.0
+        }
+      })
+    ]);
+
+    return {
+      success: true,
+      message: `Portfolio for trader "${targetUser.username}" successfully reset to initial starting capital of Rs. 1,000,000.00. All holdings and active orders have been cleared.`
     };
   }
 }
