@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
@@ -19,7 +19,9 @@ import {
   FileText,
   Trophy,
   Activity,
-  KeyRound
+  KeyRound,
+  Menu,
+  X as XIcon
 } from 'lucide-react';
 import { UserSecurityModal } from './UserSecurityModal';
 
@@ -28,6 +30,11 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
   const { user, logout } = useAuth();
   const { indices, marketStatus, syncCseData, isSyncingCse } = useMarket();
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
 
   return (
     <header className="border-b border-fintech-border bg-fintech-card sticky top-0 z-40">
@@ -234,8 +241,164 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
               <span>Sign In / Demo</span>
             </button>
           )}
+
+          {/* Mobile Navigation Hamburger Button */}
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-1.5 rounded-lg bg-fintech-panel border border-fintech-border text-zinc-300 md:hidden hover:text-white hover:bg-fintech-hover transition-colors"
+            title="Toggle Navigation Menu"
+          >
+            {isMobileMenuOpen ? <XIcon className="w-4 h-4 text-rose-400" /> : <Menu className="w-4 h-4" />}
+          </button>
         </div>
       </div>
+
+      {/* Mobile Navigation Drawer Dropdown */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden border-t border-fintech-border bg-[#090D17] px-4 py-4 space-y-3 shadow-2xl animate-in slide-in-from-top-2">
+          {/* Mobile User Profile Summary */}
+          {user ? (
+            <div className="p-3 rounded-lg bg-fintech-panel border border-fintech-border flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-zinc-100 flex items-center space-x-1.5">
+                  <span>{user.username}</span>
+                  {user.role === 'SUPER_ADMIN' ? (
+                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-purple-500/20 text-purple-300 font-mono font-bold border border-purple-500/40">
+                      SUPER ADMIN
+                    </span>
+                  ) : user.role === 'ADMIN' ? (
+                    <span className="px-1.5 py-0.2 rounded text-[10px] bg-amber-500/20 text-amber-400 font-mono border border-amber-500/30">
+                      ADMIN
+                    </span>
+                  ) : null}
+                </div>
+                <div className="text-xs font-mono text-emerald-400 mt-0.5">
+                  {formatLKR(user.balance)}
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-1.5">
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    setIsSecurityModalOpen(true);
+                  }}
+                  className="p-2 rounded bg-zinc-800 text-blue-400 hover:bg-blue-600/20"
+                  title="Security: Change Password & PIN"
+                >
+                  <KeyRound className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    logout();
+                  }}
+                  className="p-2 rounded bg-zinc-800 text-rose-400 hover:bg-rose-600/20"
+                  title="Logout"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                onOpenAuth();
+              }}
+              className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center justify-center space-x-2 shadow-sm"
+            >
+              <UserIcon className="w-4 h-4" />
+              <span>Sign In / Open Demo Account</span>
+            </button>
+          )}
+
+          {/* Navigation Menu Links */}
+          <nav className="space-y-1 text-xs">
+            <Link
+              href="/terminal"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className={`flex items-center space-x-2.5 px-3 py-2.5 rounded-lg font-medium transition-colors ${
+                pathname === '/terminal' || pathname === '/'
+                  ? 'bg-blue-600/15 text-blue-300 border border-blue-500/30'
+                  : 'text-zinc-300 hover:bg-fintech-hover'
+              }`}
+            >
+              <LayoutDashboard className="w-4 h-4 text-blue-400" />
+              <span>Trading Terminal</span>
+            </Link>
+
+            <Link
+              href="/orders"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className={`flex items-center space-x-2.5 px-3 py-2.5 rounded-lg font-medium transition-colors ${
+                pathname === '/orders'
+                  ? 'bg-blue-600/15 text-blue-300 border border-blue-500/30'
+                  : 'text-zinc-300 hover:bg-fintech-hover'
+              }`}
+            >
+              <History className="w-4 h-4 text-blue-400" />
+              <span>Orders & Settlement Ledger</span>
+            </Link>
+
+            <Link
+              href="/leaderboard"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className={`flex items-center space-x-2.5 px-3 py-2.5 rounded-lg font-medium transition-colors ${
+                pathname === '/leaderboard'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                  : 'text-zinc-300 hover:bg-fintech-hover'
+              }`}
+            >
+              <Trophy className="w-4 h-4 text-amber-400" />
+              <span>Leaderboard & Trader Standings</span>
+            </Link>
+
+            <Link
+              href="/reports"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className={`flex items-center space-x-2.5 px-3 py-2.5 rounded-lg font-medium transition-colors ${
+                pathname === '/reports'
+                  ? 'bg-blue-600/15 text-blue-300 border border-blue-500/30'
+                  : 'text-zinc-300 hover:bg-fintech-hover'
+              }`}
+            >
+              <FileText className="w-4 h-4 text-blue-400" />
+              <span>Reports & CDS Account Statements</span>
+            </Link>
+
+            {(user?.role === 'ADMIN' || user?.role === 'SUPER_ADMIN') && (
+              <Link
+                href="/admin"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`flex items-center space-x-2.5 px-3 py-2.5 rounded-lg font-medium transition-colors ${
+                  pathname === '/admin'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    : 'text-amber-400 hover:bg-amber-500/10'
+                }`}
+              >
+                <Shield className="w-4 h-4 text-amber-400" />
+                <span>Admin Console</span>
+              </Link>
+            )}
+
+            {user?.role === 'SUPER_ADMIN' && (
+              <Link
+                href="/superuser"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`flex items-center space-x-2.5 px-3 py-2.5 rounded-lg font-bold transition-colors ${
+                  pathname === '/superuser'
+                    ? 'bg-purple-600/20 text-purple-300 border border-purple-500/40'
+                    : 'text-purple-400 hover:bg-purple-500/10'
+                }`}
+              >
+                <Activity className="w-4 h-4 text-purple-400" />
+                <span>Super User Command Center ⚡</span>
+              </Link>
+            )}
+          </nav>
+        </div>
+      )}
 
       {/* Authenticated Change Password & PIN Modal */}
       <UserSecurityModal

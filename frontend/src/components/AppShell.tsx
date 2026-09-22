@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Navbar } from './Navbar';
 import { MarketStatusBar } from './MarketStatusBar';
 import { AuthModal } from './AuthModal';
+import { BottomNav } from './BottomNav';
 import { TrademarkBadge } from './TrademarkBadge';
 import { useMarket } from '../context/SocketContext';
 import { Bell, X } from 'lucide-react';
@@ -19,7 +20,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
       {/* Floating real-time execution toast */}
       {lastExecutionNotification && (
-        <div className="fixed bottom-5 right-5 z-50 max-w-sm p-4 rounded-lg bg-[#0F172A] border border-blue-500/40 shadow-2xl flex items-start space-x-3 animate-in slide-in-from-bottom-4">
+        <div className="fixed bottom-16 md:bottom-5 right-5 z-50 max-w-sm p-4 rounded-lg bg-[#0F172A] border border-blue-500/40 shadow-2xl flex items-start space-x-3 animate-in slide-in-from-bottom-4">
           <div className="p-1.5 rounded-full bg-blue-500/20 text-blue-400 mt-0.5">
             <Bell className="w-4 h-4" />
           </div>
@@ -36,9 +37,12 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         </div>
       )}
 
-      <main className="flex-1 p-4 max-w-[1600px] w-full mx-auto">
+      <main className="flex-1 p-4 pb-20 md:pb-4 max-w-[1600px] w-full mx-auto">
         {children}
       </main>
+
+      {/* Mobile Sticky Bottom Navigation Bar */}
+      <BottomNav />
 
       {/* Institutional System Footer */}
       <footer className="mt-auto border-t border-fintech-border/60 bg-[#080C14] px-4 py-4 text-xs font-sans text-zinc-500 no-print">
