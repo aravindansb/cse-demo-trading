@@ -214,18 +214,8 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
                     </span>
                   ) : null}
                 </div>
-                <div className="flex items-center justify-end space-x-1.5 text-[11px] font-mono mt-0.5">
-                  <span className="text-emerald-400 font-semibold" title={`Available Cash: ${formatLKR(availableCash)}`}>
-                    {formatLKR(availableCash)}
-                  </span>
-                  {lockedCash > 0 && (
-                    <span 
-                      className="px-1.5 py-0.2 rounded text-[10px] bg-amber-500/15 text-amber-300 border border-amber-500/30 font-medium cursor-help"
-                      title={`Locked in Pending Orders: ${formatLKR(lockedCash)} (Total Cash: ${formatLKR(totalCash)})`}
-                    >
-                      ⏳ {formatLKR(lockedCash)}
-                    </span>
-                  )}
+                <div className="text-[11px] font-mono text-emerald-400 mt-0.5" title={`Available Cash: ${formatLKR(availableCash)}`}>
+                  {formatLKR(availableCash)}
                 </div>
               </div>
 
