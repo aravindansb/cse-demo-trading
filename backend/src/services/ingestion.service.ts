@@ -33,7 +33,7 @@ export class IngestionService {
   private static isInitialized = false;
   private static cachedTickers: any[] = [];
   private static intervalId: NodeJS.Timeout | null = null;
-  private static onTickCallback?: (tickers: any[], indices: MarketIndex[]) => void;
+  private static onTickCallback?: (deltaTickers: any[], allTickers: any[], indices: MarketIndex[]) => void;
 
   // Real live baseline values for Colombo Stock Exchange indices
   private static aspi: MarketIndex = {
@@ -253,7 +253,7 @@ export class IngestionService {
     const allTickers = await prisma.marketTicker.findMany({ orderBy: { symbol: 'asc' } });
 
     if (this.onTickCallback) {
-      this.onTickCallback(allTickers, [this.aspi, this.spSl20]);
+      this.onTickCallback(allTickers, allTickers, [this.aspi, this.spSl20]);
     }
 
     return {
@@ -300,6 +300,7 @@ export class IngestionService {
     ]);
 
     const updatedTickers: any[] = [];
+    const deltaTickers: any[] = [];
 
     for (const ticker of tickers) {
       if (targetSymbolsToTick.has(ticker.symbol) || forceSimulate) {
@@ -329,8 +330,10 @@ export class IngestionService {
             }
           });
           updatedTickers.push(updated);
+          deltaTickers.push(updated);
         } catch {
           updatedTickers.push(ticker);
+          deltaTickers.push(ticker);
         }
       } else {
         updatedTickers.push(ticker);
@@ -351,7 +354,7 @@ export class IngestionService {
     this.spSl20.changePercent = Math.round((this.spSl20.change / 6000) * 10000) / 100;
 
     if (this.onTickCallback) {
-      this.onTickCallback(updatedTickers, [this.aspi, this.spSl20]);
+      this.onTickCallback(deltaTickers.length > 0 ? deltaTickers : updatedTickers.slice(0, 5), updatedTickers, [this.aspi, this.spSl20]);
     }
 
     return { tickers: updatedTickers, indices: [this.aspi, this.spSl20] };
@@ -360,7 +363,7 @@ export class IngestionService {
   /**
    * Start live ingestion loop
    */
-  public static startIngestionLoop(onTick?: (tickers: any[], indices: MarketIndex[]) => void) {
+  public static startIngestionLoop(onTick?: (deltaTickers: any[], allTickers: any[], indices: MarketIndex[]) => void) {
     if (onTick) {
       this.onTickCallback = onTick;
     }

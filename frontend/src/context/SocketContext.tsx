@@ -153,15 +153,30 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     s.on('market:ticks', (data: { tickers: MarketTicker[]; indices: MarketIndex[] }) => {
-      if (data.tickers) {
+      if (data.tickers && Array.isArray(data.tickers)) {
         setTickers((prev) => {
+          // If previous is empty or incoming is the full list (>= 200 stocks), replace directly
+          if (prev.length === 0 || data.tickers.length >= 200) {
+            return data.tickers;
+          }
+
+          // Otherwise, merge delta tickers into existing 285 tickers (saves 98% bandwidth!)
           const flashes: Record<string, 'up' | 'down'> = {};
-          const prevMap = new Map(prev.map((t) => [t.symbol, t.lastTradedPrice]));
+          const indexMap = new Map<string, number>();
+          prev.forEach((t, i) => indexMap.set(t.symbol, i));
+
+          const next = [...prev];
 
           for (const newT of data.tickers) {
-            const oldPrice = prevMap.get(newT.symbol);
-            if (oldPrice !== undefined && oldPrice !== newT.lastTradedPrice) {
-              flashes[newT.symbol] = newT.lastTradedPrice > oldPrice ? 'up' : 'down';
+            const existingIdx = indexMap.get(newT.symbol);
+            if (existingIdx !== undefined) {
+              const oldPrice = next[existingIdx].lastTradedPrice;
+              if (oldPrice !== undefined && oldPrice !== newT.lastTradedPrice) {
+                flashes[newT.symbol] = newT.lastTradedPrice > oldPrice ? 'up' : 'down';
+              }
+              next[existingIdx] = newT;
+            } else {
+              next.push(newT);
             }
           }
 
@@ -185,7 +200,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             return updated || cur;
           });
 
-          return data.tickers;
+          return next;
         });
       }
 
@@ -212,7 +227,16 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setOrderRefreshTick((prev) => prev + 1);
     });
 
+    // Inactivity / Tab Visibility listener: When student returns to tab, refresh fresh snapshot
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchInitialData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       s.disconnect();
     };
   }, [user?.id]);

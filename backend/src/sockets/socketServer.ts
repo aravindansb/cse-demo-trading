@@ -73,18 +73,23 @@ export const initSocketServer = (httpServer: HttpServer) => {
   setInterval(processMarketClockAndQueuedOrders, 5000);
 
   // Wire IngestionService tick callbacks
-  IngestionService.startIngestionLoop(async (tickers, indices) => {
-    // Broadcast live ticks to all clients
-    io.emit('market:ticks', {
-      tickers,
-      indices,
-      timestamp: new Date().toISOString()
-    });
+  IngestionService.startIngestionLoop(async (deltaTickers, allTickers, indices) => {
+    // Only broadcast over WebSocket if at least 1 socket client is connected!
+    // And send ONLY the delta (4-6 changed stocks) rather than all 285 tickers.
+    // This reduces payload from ~75 KB to ~1 KB (98.6% bandwidth reduction!)
+    const activeClientsCount = io.sockets.sockets.size;
+    if (activeClientsCount > 0) {
+      io.emit('market:ticks', {
+        tickers: deltaTickers,
+        indices,
+        timestamp: new Date().toISOString()
+      });
+    }
 
     // Check if market is active before evaluating limit orders
     const marketStatus = await MarketHoursService.isMarketOpen();
     if (marketStatus.isOpen) {
-      const executedOrders = await MatchingService.evaluateAllPendingLimitOrders(tickers);
+      const executedOrders = await MatchingService.evaluateAllPendingLimitOrders(allTickers);
       for (const order of executedOrders) {
         io.to(`user:${order.userId}`).emit('order:executed', {
           order,
