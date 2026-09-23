@@ -90,6 +90,17 @@ export class ReportService {
       periodSells: number;
       periodBuyValue: number;
       periodSellValue: number;
+      lastPurchasedAt: Date | null;
+      trades: Array<{
+        id: string;
+        side: string;
+        shares: number;
+        price: number;
+        grossAmount: number;
+        totalFees: number;
+        netAmount: number;
+        createdAt: string;
+      }>;
     }>();
 
     // Initialize map from current holdings and past trades
@@ -100,7 +111,9 @@ export class ReportService {
         periodBuys: 0,
         periodSells: 0,
         periodBuyValue: 0,
-        periodSellValue: 0
+        periodSellValue: 0,
+        lastPurchasedAt: null,
+        trades: []
       });
     }
 
@@ -112,7 +125,9 @@ export class ReportService {
           periodBuys: 0,
           periodSells: 0,
           periodBuyValue: 0,
-          periodSellValue: 0
+          periodSellValue: 0,
+          lastPurchasedAt: null,
+          trades: []
         });
       }
 
@@ -120,17 +135,36 @@ export class ReportService {
       const tradeTime = new Date(tr.createdAt).getTime();
 
       if (start && tradeTime < start.getTime()) {
-        if (tr.side === 'BUY') rec.preBuys += tr.shares;
+        if (tr.side === 'BUY') {
+          rec.preBuys += tr.shares;
+          if (!rec.lastPurchasedAt || new Date(tr.createdAt) > rec.lastPurchasedAt) {
+            rec.lastPurchasedAt = new Date(tr.createdAt);
+          }
+        }
         if (tr.side === 'SELL') rec.preSells += tr.shares;
       } else if (!end || tradeTime <= end.getTime()) {
         if (tr.side === 'BUY') {
           rec.periodBuys += tr.shares;
           rec.periodBuyValue += tr.grossAmount;
+          if (!rec.lastPurchasedAt || new Date(tr.createdAt) > rec.lastPurchasedAt) {
+            rec.lastPurchasedAt = new Date(tr.createdAt);
+          }
         }
         if (tr.side === 'SELL') {
           rec.periodSells += tr.shares;
           rec.periodSellValue += tr.grossAmount;
         }
+
+        rec.trades.push({
+          id: tr.id,
+          side: tr.side,
+          shares: tr.shares,
+          price: tr.executedPrice,
+          grossAmount: tr.grossAmount,
+          totalFees: tr.feeAmount,
+          netAmount: tr.netAmount,
+          createdAt: tr.createdAt.toISOString()
+        });
       }
     }
 
@@ -178,7 +212,9 @@ export class ReportService {
         costBasis,
         unrealizedPnL,
         unrealizedPnLPercent,
-        dayChangePercent: tickerInfo?.changePercent || 0
+        dayChangePercent: tickerInfo?.changePercent || 0,
+        lastPurchasedAt: mv.lastPurchasedAt ? mv.lastPurchasedAt.toISOString() : null,
+        trades: mv.trades.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       });
     }
 

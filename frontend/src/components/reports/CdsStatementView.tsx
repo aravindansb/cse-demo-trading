@@ -1,9 +1,9 @@
 'use client';
 
-import React from 'react';
-import { formatLKR, formatPercent } from '../../lib/utils';
+import React, { useState } from 'react';
+import { formatLKR, formatPercent, formatDateTimeSLT } from '../../lib/utils';
 import { exportToCsv, triggerPrintReport } from '../../lib/exportUtils';
-import { Printer, Download, Landmark, ShieldCheck, TrendingUp, Wallet, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Printer, Download, Landmark, ShieldCheck, TrendingUp, Wallet, ArrowUpRight, ArrowDownRight, Clock, ChevronDown, ChevronRight } from 'lucide-react';
 import { TrademarkBadge } from '../TrademarkBadge';
 
 interface CdsStatementViewProps {
@@ -12,6 +12,20 @@ interface CdsStatementViewProps {
 }
 
 export const CdsStatementView: React.FC<CdsStatementViewProps> = ({ data, loading }) => {
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  const toggleRow = (symbol: string) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(symbol)) {
+        next.delete(symbol);
+      } else {
+        next.add(symbol);
+      }
+      return next;
+    });
+  };
+
   if (loading) {
     return (
       <div className="p-12 text-center text-zinc-400 font-mono text-sm animate-pulse">
@@ -36,6 +50,7 @@ export const CdsStatementView: React.FC<CdsStatementViewProps> = ({ data, loadin
       'Symbol': h.symbol,
       'Company Name': h.name,
       'Sector': h.sector,
+      'Last Purchased (SLT)': h.lastPurchasedAt ? formatDateTimeSLT(h.lastPurchasedAt) : '-',
       'Opening Shares': h.openingShares,
       'Bought In Period': h.periodBought,
       'Sold In Period': h.periodSold,
@@ -50,7 +65,7 @@ export const CdsStatementView: React.FC<CdsStatementViewProps> = ({ data, loadin
       'Unrealized P&L (%)': h.unrealizedPnLPercent
     }));
 
-    exportToCsv(`CDS_Statement_${statementInfo.cdsAccountNumber}_${statementInfo.statementPeriod.to}`, csvRows);
+    exportToCsv(`CDS_Statement_${statementInfo.cdsAccountNumber.replace(/[^a-zA-Z0-9]/g, '_')}_${statementInfo.statementPeriod.to}`, csvRows);
   };
 
   return (
@@ -111,6 +126,9 @@ export const CdsStatementView: React.FC<CdsStatementViewProps> = ({ data, loadin
               <div className="text-zinc-400 text-[11px] print:text-zinc-700">
                 Period: <span className="text-zinc-200 print:text-black">{statementInfo.statementPeriod.from}</span> to{' '}
                 <span className="text-zinc-200 print:text-black">{statementInfo.statementPeriod.to}</span>
+              </div>
+              <div className="text-zinc-400 text-[10px] print:text-zinc-700">
+                Generated: <span className="text-zinc-300 print:text-black">{formatDateTimeSLT(statementInfo.statementPeriod.generatedAt)}</span>
               </div>
             </div>
           </div>
@@ -203,54 +221,153 @@ export const CdsStatementView: React.FC<CdsStatementViewProps> = ({ data, loadin
               ) : (
                 holdings.map((h: any) => {
                   const isProfit = h.unrealizedPnL >= 0;
+                  const isExpanded = expandedRows.has(h.symbol);
                   return (
-                    <tr key={h.symbol} className="hover:bg-fintech-hover/50 transition-colors font-mono">
-                      <td className="py-2.5 px-3 font-sans">
-                        <div className="font-bold text-zinc-100 flex items-center space-x-1.5 print:text-black">
-                          <span>{h.symbol}</span>
-                          <span className="text-[10px] font-normal px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 print:border print:border-zinc-300">
-                            {h.sector}
+                    <React.Fragment key={h.symbol}>
+                      <tr 
+                        onClick={() => toggleRow(h.symbol)}
+                        className="hover:bg-fintech-hover/60 transition-colors font-mono cursor-pointer select-none group"
+                        title="Click to expand/collapse purchase transaction history"
+                      >
+                        <td className="py-2.5 px-3 font-sans">
+                          <div className="font-bold text-zinc-100 flex items-center space-x-1.5 print:text-black">
+                            <span className="text-zinc-500 group-hover:text-blue-400 transition-colors print:hidden">
+                              {isExpanded ? (
+                                <ChevronDown className="w-3.5 h-3.5 text-blue-400" />
+                              ) : (
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              )}
+                            </span>
+                            <span>{h.symbol}</span>
+                            <span className="text-[10px] font-normal px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 print:border print:border-zinc-300">
+                              {h.sector}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-zinc-400 truncate max-w-xs pl-5 print:text-zinc-600 print:pl-0">
+                            {h.name}
+                          </div>
+                          {h.lastPurchasedAt && (
+                            <div className="text-[10px] text-zinc-400 font-mono flex items-center space-x-1 mt-0.5 pl-5 print:text-zinc-700 print:pl-0">
+                              <Clock className="w-2.5 h-2.5 text-amber-400/90 shrink-0" />
+                              <span>Last Bought: <strong className="text-zinc-300 font-semibold print:text-black">{formatDateTimeSLT(h.lastPurchasedAt)}</strong></span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-zinc-400">
+                          {(h.openingShares ?? 0).toLocaleString()}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-emerald-400 font-semibold">
+                          {(h.periodBought ?? 0) > 0 ? `+${(h.periodBought ?? 0).toLocaleString()}` : '-'}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-rose-400 font-semibold">
+                          {(h.periodSold ?? 0) > 0 ? `-${(h.periodSold ?? 0).toLocaleString()}` : '-'}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-zinc-100 font-bold print:text-black">
+                          {(h.closingShares ?? 0).toLocaleString()}
+                          {(h.lockedShares ?? 0) > 0 && (
+                            <span className="block text-[10px] text-amber-400 font-normal">
+                              ({h.lockedShares} locked)
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-zinc-300">
+                          {Number(h.avgCostPrice || 0).toFixed(2)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-zinc-100 font-medium print:text-black">
+                          {Number(h.marketPrice || 0).toFixed(2)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-bold text-zinc-100 print:text-black">
+                          {formatLKR(h.valuation || 0)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-medium">
+                          <span className={isProfit ? 'text-fintech-green font-semibold' : 'text-fintech-red font-semibold'}>
+                            {isProfit ? '+' : ''}{formatLKR(h.unrealizedPnL)}
                           </span>
-                        </div>
-                        <div className="text-[11px] text-zinc-400 truncate max-w-xs print:text-zinc-600">
-                          {h.name}
-                        </div>
-                      </td>
-                      <td className="py-2.5 px-3 text-right text-zinc-400">
-                        {(h.openingShares ?? 0).toLocaleString()}
-                      </td>
-                      <td className="py-2.5 px-3 text-right text-emerald-400 font-semibold">
-                        {(h.periodBought ?? 0) > 0 ? `+${(h.periodBought ?? 0).toLocaleString()}` : '-'}
-                      </td>
-                      <td className="py-2.5 px-3 text-right text-rose-400 font-semibold">
-                        {(h.periodSold ?? 0) > 0 ? `-${(h.periodSold ?? 0).toLocaleString()}` : '-'}
-                      </td>
-                      <td className="py-2.5 px-3 text-right text-zinc-100 font-bold print:text-black">
-                        {(h.closingShares ?? 0).toLocaleString()}
-                        {(h.lockedShares ?? 0) > 0 && (
-                          <span className="block text-[10px] text-amber-400 font-normal">
-                            ({h.lockedShares} locked)
+                          <span className="block text-[10px] text-zinc-400">
+                            ({formatPercent(h.unrealizedPnLPercent)})
                           </span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-3 text-right text-zinc-300">
-                        {Number(h.avgCostPrice || 0).toFixed(2)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right text-zinc-100 font-medium print:text-black">
-                        {Number(h.marketPrice || 0).toFixed(2)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-bold text-zinc-100 print:text-black">
-                        {formatLKR(h.valuation || 0)}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-medium">
-                        <span className={isProfit ? 'text-fintech-green font-semibold' : 'text-fintech-red font-semibold'}>
-                          {isProfit ? '+' : ''}{formatLKR(h.unrealizedPnL)}
-                        </span>
-                        <span className="block text-[10px] text-zinc-400">
-                          ({formatPercent(h.unrealizedPnLPercent)})
-                        </span>
-                      </td>
-                    </tr>
+                        </td>
+                      </tr>
+
+                      {/* Expandable Transaction History Sub-Row */}
+                      {isExpanded && (
+                        <tr className="bg-[#090E1A] border-y border-blue-500/20 print:bg-zinc-50 print:border-zinc-300">
+                          <td colSpan={9} className="p-3 pl-8 print:pl-3">
+                            <div className="rounded-lg border border-fintech-border/70 bg-fintech-panel/80 p-3 space-y-2.5 print:border-zinc-300 print:bg-white">
+                              <div className="flex items-center justify-between text-xs border-b border-fintech-border/60 pb-1.5 font-sans print:border-zinc-200">
+                                <div className="flex items-center space-x-2">
+                                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                                  <span className="font-bold text-zinc-200 print:text-black">
+                                    Itemized Purchases & Trades for {h.symbol}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] text-zinc-400 font-mono print:text-zinc-600">
+                                  {Array.isArray(h.trades) ? h.trades.length : 0} recorded transaction(s)
+                                </span>
+                              </div>
+
+                              {(!h.trades || h.trades.length === 0) ? (
+                                <div className="py-2 text-center text-zinc-500 font-mono text-xs">
+                                  No transaction records found in this specific statement period.
+                                </div>
+                              ) : (
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-left text-xs font-mono">
+                                    <thead>
+                                      <tr className="text-[10px] text-zinc-400 uppercase tracking-wider border-b border-fintech-border/40 pb-1 print:border-zinc-200 print:text-zinc-700">
+                                        <th className="py-1 px-2 font-semibold">Date & Time (SLT)</th>
+                                        <th className="py-1 px-2 text-center font-semibold">Type</th>
+                                        <th className="py-1 px-2 text-right font-semibold">Shares</th>
+                                        <th className="py-1 px-2 text-right font-semibold">Executed Price</th>
+                                        <th className="py-1 px-2 text-right font-semibold">Gross Value</th>
+                                        <th className="py-1 px-2 text-right font-semibold">CSE Fees (1.12%)</th>
+                                        <th className="py-1 px-2 text-right font-semibold">Net Settlement</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-fintech-border/30 print:divide-zinc-200">
+                                      {h.trades.map((tr: any) => {
+                                        const isBuy = tr.side === 'BUY';
+                                        return (
+                                          <tr key={tr.id} className="hover:bg-zinc-800/30 transition-colors print:hover:bg-transparent">
+                                            <td className="py-1.5 px-2 text-zinc-300 font-medium print:text-black">
+                                              {formatDateTimeSLT(tr.createdAt)}
+                                            </td>
+                                            <td className="py-1.5 px-2 text-center">
+                                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                                isBuy 
+                                                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 print:border-none print:text-emerald-700' 
+                                                  : 'bg-rose-500/15 text-rose-400 border border-rose-500/30 print:border-none print:text-rose-700'
+                                              }`}>
+                                                {tr.side}
+                                              </span>
+                                            </td>
+                                            <td className={`py-1.5 px-2 text-right font-semibold ${isBuy ? 'text-emerald-400' : 'text-rose-400'} print:text-black`}>
+                                              {isBuy ? '+' : '-'}{tr.shares.toLocaleString()}
+                                            </td>
+                                            <td className="py-1.5 px-2 text-right text-zinc-200 print:text-black">
+                                              {Number(tr.price).toFixed(2)}
+                                            </td>
+                                            <td className="py-1.5 px-2 text-right text-zinc-300 print:text-black">
+                                              {formatLKR(tr.grossAmount)}
+                                            </td>
+                                            <td className="py-1.5 px-2 text-right text-zinc-400 text-[11px] print:text-zinc-600">
+                                              {formatLKR(tr.totalFees)}
+                                            </td>
+                                            <td className="py-1.5 px-2 text-right font-bold text-zinc-100 print:text-black">
+                                              {formatLKR(tr.netAmount)}
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })
               )}

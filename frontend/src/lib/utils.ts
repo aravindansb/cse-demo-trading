@@ -29,3 +29,21 @@ export function formatNumber(num: number | null | undefined): string {
   if (num === null || num === undefined || isNaN(num)) return '0';
   return new Intl.NumberFormat('en-US').format(num);
 }
+
+export function formatDateTimeSLT(dateInput?: string | Date | null): string {
+  if (!dateInput) return '-';
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return '-';
+  
+  return d.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Colombo'
+  });
+}
+
