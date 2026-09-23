@@ -152,7 +152,9 @@ export class AuthService {
         username: user.username,
         email: user.email,
         role: user.role,
-        balance: user.wallet?.balance || CSE_CONFIG.INITIAL_VIRTUAL_CAPITAL
+        balance: user.wallet?.balance || CSE_CONFIG.INITIAL_VIRTUAL_CAPITAL,
+        lockedBalance: user.wallet?.lockedBalance || 0,
+        availableBalance: Math.round(((user.wallet?.balance || CSE_CONFIG.INITIAL_VIRTUAL_CAPITAL) - (user.wallet?.lockedBalance || 0)) * 100) / 100
       }
     };
   }
@@ -177,7 +179,13 @@ export class AuthService {
       throw new Error('User not found');
     }
 
-    return user;
+    return {
+      ...user,
+      wallet: user.wallet ? {
+        ...user.wallet,
+        availableBalance: Math.round((user.wallet.balance - user.wallet.lockedBalance) * 100) / 100
+      } : null
+    };
   }
 
   /**

@@ -9,6 +9,8 @@ export interface User {
   email: string;
   role: 'USER' | 'ADMIN' | 'SUPER_ADMIN';
   balance?: number;
+  lockedBalance?: number;
+  availableBalance?: number;
 }
 
 interface AuthContextType {
@@ -33,12 +35,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const response = await api.get('/auth/me');
       if (response.data) {
+        const wallet = response.data.wallet;
+        const totalCash = wallet?.balance ?? 0;
+        const lockedCash = wallet?.lockedBalance ?? 0;
+        const availCash = wallet?.availableBalance ?? Math.round((totalCash - lockedCash) * 100) / 100;
+
         setUser({
           id: response.data.id,
           username: response.data.username,
           email: response.data.email,
           role: response.data.role,
-          balance: response.data.wallet?.balance,
+          balance: totalCash,
+          lockedBalance: lockedCash,
+          availableBalance: availCash,
         });
       }
     } catch {

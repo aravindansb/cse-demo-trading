@@ -32,6 +32,10 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  const totalCash = user?.balance ?? 0;
+  const lockedCash = user?.lockedBalance ?? 0;
+  const availableCash = user?.availableBalance ?? Math.max(0, Math.round((totalCash - lockedCash) * 100) / 100);
+
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
@@ -210,8 +214,18 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
                     </span>
                   ) : null}
                 </div>
-                <div className="text-[11px] font-mono text-emerald-400">
-                  {formatLKR(user.balance)}
+                <div className="flex items-center justify-end space-x-1.5 text-[11px] font-mono mt-0.5">
+                  <span className="text-emerald-400 font-semibold" title={`Available Cash: ${formatLKR(availableCash)}`}>
+                    {formatLKR(availableCash)}
+                  </span>
+                  {lockedCash > 0 && (
+                    <span 
+                      className="px-1.5 py-0.2 rounded text-[10px] bg-amber-500/15 text-amber-300 border border-amber-500/30 font-medium cursor-help"
+                      title={`Locked in Pending Orders: ${formatLKR(lockedCash)} (Total Cash: ${formatLKR(totalCash)})`}
+                    >
+                      ⏳ {formatLKR(lockedCash)}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -272,8 +286,17 @@ export const Navbar: React.FC<{ onOpenAuth: () => void }> = ({ onOpenAuth }) => 
                     </span>
                   ) : null}
                 </div>
-                <div className="text-xs font-mono text-emerald-400 mt-0.5">
-                  {formatLKR(user.balance)}
+                <div className="flex items-center space-x-2.5 text-xs font-mono mt-1">
+                  <div>
+                    <span className="text-[9px] uppercase tracking-wider text-zinc-500 block font-sans font-medium">Available</span>
+                    <span className="text-emerald-400 font-semibold">{formatLKR(availableCash)}</span>
+                  </div>
+                  {lockedCash > 0 && (
+                    <div className="border-l border-zinc-700/60 pl-2.5">
+                      <span className="text-[9px] uppercase tracking-wider text-amber-400/90 block font-sans font-medium">In Orders</span>
+                      <span className="text-amber-300 font-semibold">{formatLKR(lockedCash)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
