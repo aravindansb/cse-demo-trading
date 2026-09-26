@@ -78,10 +78,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         api.get('/market/status'),
       ]);
 
-      setTickers(tickersRes.data);
-      if (tickersRes.data.length > 0 && !selectedTicker) {
+      const stockList: MarketTicker[] = Array.isArray(tickersRes.data)
+        ? tickersRes.data
+        : (tickersRes.data?.tickers || []);
+      setTickers(stockList);
+      if (stockList.length > 0 && !selectedTicker) {
         // Default to a blue-chip stock like JKH or COMB if present, else first
-        const jkh = tickersRes.data.find((t: MarketTicker) => t.symbol === 'JKH.N0000') || tickersRes.data[0];
+        const jkh = stockList.find((t: MarketTicker) => t.symbol === 'JKH.N0000') || stockList[0];
         setSelectedTicker(jkh);
       }
       setIndices(indicesRes.data);

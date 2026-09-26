@@ -370,14 +370,10 @@ export class IngestionService {
 
     if (this.intervalId) return;
 
-    // Run periodic sync every 5 seconds
+    // Run periodic market simulation every 5 seconds (instant local execution, zero external latency)
     this.intervalId = setInterval(async () => {
       try {
-        // Try live sync first
-        const synced = await this.syncLiveCseData();
-        if (!synced.success) {
-          await this.simulateMarketTicks();
-        }
+        await this.simulateMarketTicks();
       } catch (err) {
         console.error('Error in market ingestion loop:', err);
       }
