@@ -10,6 +10,8 @@ router.get('/tickers/:symbol', MarketController.getTicker);
 router.get('/indices', MarketController.getIndices);
 router.post('/simulate-tick', MarketController.simulateTick);
 router.post('/sync-cse', MarketController.syncCse);
+router.post('/reset-official', MarketController.resetOfficial);
 router.post('/override-session', authenticate as any, requireSuperAdmin as any, MarketController.overrideSession);
 
 export default router;
+

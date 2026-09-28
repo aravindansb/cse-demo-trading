@@ -84,4 +84,17 @@ export class MarketController {
       return res.status(400).json({ error: err.message || 'Failed to set session override' });
     }
   }
+
+  public static async resetOfficial(req: Request, res: Response) {
+    try {
+      const count = await IngestionService.reloadFromOfficialSnapshot();
+      return res.status(200).json({
+        message: `Successfully reset market to official CSE data (${count} stocks)`,
+        indices: IngestionService.getIndices()
+      });
+    } catch (err: any) {
+      return res.status(500).json({ error: err.message || 'Failed to reset market data' });
+    }
+  }
 }
+

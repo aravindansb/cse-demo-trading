@@ -2,12 +2,14 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import prisma from '../utils/prisma';
+import { MarketHoursService } from './marketHours.service';
 
 export interface MarketIndex {
   name: string;
   value: number;
   change: number;
   changePercent: number;
+  previousClose?: number;
 }
 
 export function classifySector(name: string, symbol: string): string {
@@ -35,23 +37,124 @@ export class IngestionService {
   private static intervalId: NodeJS.Timeout | null = null;
   private static onTickCallback?: (deltaTickers: any[], allTickers: any[], indices: MarketIndex[]) => void;
 
-  // Real live baseline values for Colombo Stock Exchange indices
+  // Real live baseline values for Colombo Stock Exchange indices (as of Sep 28, 2026)
   private static aspi: MarketIndex = {
     name: 'All Share Price Index (ASPI)',
-    value: 21313.92,
-    change: -68.82,
-    changePercent: -0.32
+    value: 20943.79,
+    change: -93.56,
+    changePercent: -0.44,
+    previousClose: 21037.35
   };
 
   private static spSl20: MarketIndex = {
     name: 'S&P Sri Lanka 20 (S&P SL20)',
-    value: 5994.33,
-    change: -8.13,
-    changePercent: -0.14
+    value: 5920.72,
+    change: -20.00,
+    changePercent: -0.34,
+    previousClose: 5940.72
   };
 
   public static getCachedTickers(): any[] {
     return this.cachedTickers;
+  }
+
+  /**
+   * Reload authentic official CSE closing data from cse_all_stocks.json snapshot
+   */
+  public static async reloadFromOfficialSnapshot(): Promise<number> {
+    let stocksList: any[] = [];
+    const snapshotPath = path.join(__dirname, '../config/cse_all_stocks.json');
+
+    if (fs.existsSync(snapshotPath)) {
+      try {
+        const raw = fs.readFileSync(snapshotPath, 'utf8');
+        const parsed = JSON.parse(raw);
+        stocksList = Array.isArray(parsed) ? parsed : (parsed.reqTradeSummery || []);
+      } catch (err) {
+        console.error('Error reading cse_all_stocks.json snapshot:', err);
+      }
+    }
+
+    if (stocksList.length === 0) {
+      console.warn('[IngestionService] Snapshot empty or missing');
+      return 0;
+    }
+
+    // Reset indices to official baseline
+    this.aspi = {
+      name: 'All Share Price Index (ASPI)',
+      value: 20943.79,
+      change: -93.56,
+      changePercent: -0.44,
+      previousClose: 21037.35
+    };
+
+    this.spSl20 = {
+      name: 'S&P Sri Lanka 20 (S&P SL20)',
+      value: 5920.72,
+      change: -20.00,
+      changePercent: -0.34,
+      previousClose: 5940.72
+    };
+
+    for (const item of stocksList) {
+      const symbol = item.symbol;
+      if (!symbol) continue;
+
+      const name = item.name || symbol;
+      const sector = classifySector(name, symbol);
+      const price = Number(item.price || item.closingPrice || item.previousClose || 10.0);
+      const previousClose = Number(item.previousClose || price);
+      const openPrice = Number(item.open || price);
+      const highPrice = Number(item.high || price);
+      const lowPrice = Number(item.low || price);
+      const change = Number(item.change !== undefined ? item.change : Math.round((price - previousClose) * 100) / 100);
+      const changePercent = Number(item.percentageChange !== undefined ? item.percentageChange : (previousClose > 0 ? Math.round((change / previousClose) * 10000) / 100 : 0));
+      const volume = Number(item.sharevolume || item.crossingVolume || 0);
+      const turnover = Number(item.turnover || Math.round(price * volume * 100) / 100);
+
+      await prisma.marketTicker.upsert({
+        where: { symbol },
+        update: {
+          name,
+          sector,
+          lastTradedPrice: price,
+          openPrice,
+          highPrice,
+          lowPrice,
+          previousClose,
+          change,
+          changePercent,
+          volume,
+          turnover
+        },
+        create: {
+          symbol,
+          name,
+          sector,
+          lastTradedPrice: price,
+          openPrice,
+          highPrice,
+          lowPrice,
+          previousClose,
+          change,
+          changePercent,
+          volume,
+          turnover
+        }
+      });
+    }
+
+    const allTickers = await prisma.marketTicker.findMany({ orderBy: { symbol: 'asc' } });
+    this.cachedTickers = allTickers;
+    this.isInitialized = true;
+
+    if (this.onTickCallback) {
+      this.onTickCallback(allTickers, allTickers, [this.aspi, this.spSl20]);
+    }
+
+    console.log(`[IngestionService] Successfully loaded and synchronized ${allTickers.length} authentic CSE stocks.`);
+    return allTickers.length;
   }
 
   /**
@@ -60,8 +163,17 @@ export class IngestionService {
   public static async ensureDefaultTickers() {
     if (this.isInitialized && this.cachedTickers.length > 0) return;
 
+    // Check if database already has valid, non-corrupted data
     const existingCount = await prisma.marketTicker.count();
     if (existingCount >= 200) {
+      // Check if data is corrupted (e.g. phantom high volume on AAF)
+      const testTicker = await prisma.marketTicker.findUnique({ where: { symbol: 'AAF.N0000' } });
+      if (testTicker && testTicker.volume > 1000000) {
+        console.log('[IngestionService] Detected corrupted/drifted ticker data in database. Auto-reloading authentic snapshot...');
+        await this.reloadFromOfficialSnapshot();
+        return;
+      }
+
       this.isInitialized = true;
       if (this.cachedTickers.length === 0) {
         this.cachedTickers = await prisma.marketTicker.findMany({ orderBy: { symbol: 'asc' } });
@@ -69,84 +181,7 @@ export class IngestionService {
       return;
     }
 
-    // Load full 285 stocks from local snapshot or fetch live
-    let stocksList: any[] = [];
-    const snapshotPath = path.join(__dirname, '../config/cse_all_stocks.json');
-
-    if (fs.existsSync(snapshotPath)) {
-      try {
-        const raw = fs.readFileSync(snapshotPath, 'utf8');
-        stocksList = JSON.parse(raw);
-      } catch (err) {
-        console.error('Error reading cse_all_stocks.json snapshot:', err);
-      }
-    }
-
-    if (stocksList.length === 0) {
-      try {
-        const headers = { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' };
-        const res = await axios.post('https://www.cse.lk/api/tradeSummary', {}, { headers, timeout: 5000 });
-        stocksList = res.data?.reqTradeSummery || [];
-      } catch (err) {
-        console.error('Failed to fetch initial stocks from CSE API:', err);
-      }
-    }
-
-    if (stocksList.length > 0) {
-      for (const item of stocksList) {
-        const symbol = item.symbol;
-        if (!symbol) continue;
-
-        const name = item.name || symbol;
-        const sector = classifySector(name, symbol);
-        const price = Number(item.price || item.closingPrice || item.previousClose || 10.0);
-        const previousClose = Number(item.previousClose || price);
-        const openPrice = Number(item.open || price);
-        const highPrice = Number(item.high || price);
-        const lowPrice = Number(item.low || price);
-        const change = Number(item.change || Math.round((price - previousClose) * 100) / 100);
-        const changePercent = Number(item.percentageChange || (previousClose > 0 ? Math.round((change / previousClose) * 10000) / 100 : 0));
-        const volume = Number(item.sharevolume || item.crossingVolume || 1000);
-        const turnover = Number(item.turnover || Math.round(price * volume * 100) / 100);
-
-        await prisma.marketTicker.upsert({
-          where: { symbol },
-          update: {
-            name,
-            sector,
-            lastTradedPrice: price,
-            openPrice,
-            highPrice,
-            lowPrice,
-            previousClose,
-            change,
-            changePercent,
-            volume,
-            turnover
-          },
-          create: {
-            symbol,
-            name,
-            sector,
-            lastTradedPrice: price,
-            openPrice,
-            highPrice,
-            lowPrice,
-            previousClose,
-            change,
-            changePercent,
-            volume,
-            turnover
-          }
-        });
-      }
-      console.log(`[IngestionService] Successfully loaded and synchronized ${stocksList.length} CSE stocks into database.`);
-    }
-
-    // Also sync indices on startup
-    await this.fetchCseIndices();
-
-    this.isInitialized = true;
+    await this.reloadFromOfficialSnapshot();
   }
 
   /**
@@ -161,52 +196,59 @@ export class IngestionService {
       ]);
 
       if (aspiRes.data && aspiRes.data.value) {
+        const val = Number(aspiRes.data.value);
+        const prev = Number(aspiRes.data.lowValue || 21037.35);
         this.aspi = {
           name: 'All Share Price Index (ASPI)',
-          value: Number(aspiRes.data.value),
+          value: val,
           change: Number(aspiRes.data.change || 0),
-          changePercent: Number(aspiRes.data.percentage || 0)
+          changePercent: Number(aspiRes.data.percentage || 0),
+          previousClose: Math.round((val - Number(aspiRes.data.change || 0)) * 100) / 100
         };
       }
 
       if (snpRes.data && snpRes.data.value) {
+        const val = Number(snpRes.data.value);
         this.spSl20 = {
           name: 'S&P Sri Lanka 20 (S&P SL20)',
-          value: Number(snpRes.data.value),
+          value: val,
           change: Number(snpRes.data.change || 0),
-          changePercent: Number(snpRes.data.percentage || 0)
+          changePercent: Number(snpRes.data.percentage || 0),
+          previousClose: Math.round((val - Number(snpRes.data.change || 0)) * 100) / 100
         };
       }
       return true;
     } catch (err) {
-      console.error('Failed to fetch live indices from CSE API:', err);
+      console.warn('[IngestionService] Could not reach live CSE index endpoints (expected on datacenter IPs). Using authentic baseline.');
       return false;
     }
   }
 
   /**
-   * Full sync from CSE live endpoints for all 285 stocks and indices
+   * Full sync from CSE live endpoints or fallback to authentic snapshot
    */
-  public static async syncLiveCseData(): Promise<{ success: boolean; stockCount: number; aspi: MarketIndex; spSl20: MarketIndex }> {
+  public static async syncLiveCseData(): Promise<{ success: boolean; stockCount: number; aspi: MarketIndex; spSl20: MarketIndex; source: string }> {
     const headers = { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' };
+    let liveSuccess = false;
 
-    // 1. Fetch live indices
-    await this.fetchCseIndices();
-
-    // 2. Fetch live stocks
-    let updatedCount = 0;
     try {
+      await this.fetchCseIndices();
       const res = await axios.post('https://www.cse.lk/api/tradeSummary', {}, { headers, timeout: 5000 });
       const list = res.data?.reqTradeSummery;
 
       if (Array.isArray(list) && list.length > 0) {
+        liveSuccess = true;
+        try {
+          const snapshotPath = path.join(__dirname, '../config/cse_all_stocks.json');
+          fs.writeFileSync(snapshotPath, JSON.stringify(res.data, null, 2));
+        } catch {}
+
         for (const item of list) {
           if (!item.symbol) continue;
           const price = Number(item.price || item.closingPrice || item.previousClose || 0);
           if (price <= 0) continue;
 
           const sector = classifySector(item.name || item.symbol, item.symbol);
-
           await prisma.marketTicker.upsert({
             where: { symbol: item.symbol },
             update: {
@@ -237,36 +279,35 @@ export class IngestionService {
               turnover: Number(item.turnover || 0)
             }
           });
-          updatedCount++;
         }
-
-        // Save fresh snapshot to disk
-        try {
-          const snapshotPath = path.join(__dirname, '../config/cse_all_stocks.json');
-          fs.writeFileSync(snapshotPath, JSON.stringify(list, null, 2));
-        } catch {}
       }
     } catch (err) {
-      console.error('Failed to sync live tradeSummary from CSE:', err);
+      console.warn('[IngestionService] Live CSE tradeSummary unreachable. Falling back to authentic snapshot.');
+    }
+
+    if (!liveSuccess) {
+      await this.reloadFromOfficialSnapshot();
     }
 
     const allTickers = await prisma.marketTicker.findMany({ orderBy: { symbol: 'asc' } });
+    this.cachedTickers = allTickers;
 
     if (this.onTickCallback) {
       this.onTickCallback(allTickers, allTickers, [this.aspi, this.spSl20]);
     }
 
     return {
-      success: updatedCount > 0,
+      success: true,
       stockCount: allTickers.length,
       aspi: this.aspi,
-      spSl20: this.spSl20
+      spSl20: this.spSl20,
+      source: liveSuccess ? 'CSE_LIVE_API' : 'CSE_OFFICIAL_SNAPSHOT'
     };
   }
 
   /**
-   * Generate stochastic price ticks (used during simulation / demo sessions).
-   * High performance: updates only 4-6 active liquid stocks per tick to prevent DB saturation.
+   * Generate realistic market ticks strictly during market open hours.
+   * If market is closed, returns stable, authentic closing prices with ZERO drift.
    */
   public static async simulateMarketTicks(forceSimulate = false) {
     let tickers = this.cachedTickers;
@@ -276,43 +317,51 @@ export class IngestionService {
     }
 
     if (tickers.length === 0) {
-      await this.ensureDefaultTickers();
+      await this.reloadFromOfficialSnapshot();
       tickers = this.cachedTickers;
       if (tickers.length === 0) return { tickers: [], indices: [this.aspi, this.spSl20] };
     }
 
-    // Select 5-6 active liquid stocks per tick (realistic CSE market movement)
+    // Check if the CSE market is currently open
+    const marketStatus = await MarketHoursService.isMarketOpen();
+    if (!marketStatus.isOpen && !forceSimulate) {
+      // Market is CLOSED: Keep prices, volumes, and indices completely stable at authentic closing values!
+      return { tickers: this.cachedTickers, indices: [this.aspi, this.spSl20] };
+    }
+
+    // Market IS open (or demo session override): Simulate realistic trading action
     const activeSymbols = new Set([
       'JKH.N0000', 'COMB.N0000', 'HNB.N0000', 'SAMP.N0000', 'DIAL.N0000', 'BIL.N0000', 'LIOC.N0000'
     ]);
 
-    // Pick 2 blue chips + 3 random stocks to simulate live trading action
-    const randomPicked = tickers
-      .filter((t) => !activeSymbols.has(t.symbol))
-      .sort(() => 0.5 - Math.random())
-      .slice(0, 3)
-      .map((t) => t.symbol);
-
+    const activeList = Array.from(activeSymbols);
     const targetSymbolsToTick = new Set([
-      Array.from(activeSymbols)[Math.floor(Math.random() * activeSymbols.size)],
-      Array.from(activeSymbols)[Math.floor(Math.random() * activeSymbols.size)],
-      ...randomPicked
+      activeList[Math.floor(Math.random() * activeList.length)],
+      activeList[Math.floor(Math.random() * activeList.length)]
     ]);
 
     const updatedTickers: any[] = [];
     const deltaTickers: any[] = [];
 
     for (const ticker of tickers) {
-      if (targetSymbolsToTick.has(ticker.symbol) || forceSimulate) {
-        const deltaPercent = (Math.random() * 0.8 - 0.38) / 100;
+      if (targetSymbolsToTick.has(ticker.symbol)) {
+        // Zero-mean symmetric fluctuation between -0.15% and +0.15% per tick
+        const deltaPercent = (Math.random() - 0.5) * 0.003;
         let newPrice = Math.round(ticker.lastTradedPrice * (1 + deltaPercent) * 100) / 100;
         if (newPrice < 0.5) newPrice = 0.5;
+
+        // CSE circuit breaker / daily price collar: strictly capped within +/- 10% of previous close
+        const collarMin = Math.round(ticker.previousClose * 0.90 * 100) / 100;
+        const collarMax = Math.round(ticker.previousClose * 1.10 * 100) / 100;
+        newPrice = Math.max(collarMin, Math.min(collarMax, newPrice));
 
         const change = Math.round((newPrice - ticker.previousClose) * 100) / 100;
         const changePercent = ticker.previousClose > 0 ? Math.round((change / ticker.previousClose) * 10000) / 100 : 0;
         const newHigh = Math.max(ticker.highPrice, newPrice);
         const newLow = Math.min(ticker.lowPrice, newPrice);
-        const additionalVolume = Math.floor(Math.random() * 8000) + 100;
+
+        // Realistic CSE trade lot increment (10 to 50 shares)
+        const additionalVolume = Math.floor(Math.random() * 5 + 1) * 10;
         const newVolume = ticker.volume + additionalVolume;
         const newTurnover = Math.round((ticker.turnover + additionalVolume * newPrice) * 100) / 100;
 
@@ -342,19 +391,21 @@ export class IngestionService {
 
     this.cachedTickers = updatedTickers;
 
-    // Minor index fluctuations
-    const aspiDelta = Math.round((Math.random() * 6 - 2.9) * 100) / 100;
-    this.aspi.value = Math.round((this.aspi.value + aspiDelta) * 100) / 100;
-    this.aspi.change = Math.round((this.aspi.change + aspiDelta) * 100) / 100;
-    this.aspi.changePercent = Math.round((this.aspi.change / 21350) * 10000) / 100;
+    // Symmetric zero-mean index fluctuations anchored to previousClose
+    const aspiBase = this.aspi.previousClose || 21037.35;
+    const aspiDelta = Math.round((Math.random() - 0.5) * 1.5 * 100) / 100;
+    this.aspi.value = Math.max(aspiBase * 0.98, Math.min(aspiBase * 1.02, Math.round((this.aspi.value + aspiDelta) * 100) / 100));
+    this.aspi.change = Math.round((this.aspi.value - aspiBase) * 100) / 100;
+    this.aspi.changePercent = Math.round((this.aspi.change / aspiBase) * 10000) / 100;
 
-    const spDelta = Math.round((Math.random() * 2.5 - 1.2) * 100) / 100;
-    this.spSl20.value = Math.round((this.spSl20.value + spDelta) * 100) / 100;
-    this.spSl20.change = Math.round((this.spSl20.change + spDelta) * 100) / 100;
-    this.spSl20.changePercent = Math.round((this.spSl20.change / 6000) * 10000) / 100;
+    const spBase = this.spSl20.previousClose || 5940.72;
+    const spDelta = Math.round((Math.random() - 0.5) * 0.8 * 100) / 100;
+    this.spSl20.value = Math.max(spBase * 0.98, Math.min(spBase * 1.02, Math.round((this.spSl20.value + spDelta) * 100) / 100));
+    this.spSl20.change = Math.round((this.spSl20.value - spBase) * 100) / 100;
+    this.spSl20.changePercent = Math.round((this.spSl20.change / spBase) * 10000) / 100;
 
-    if (this.onTickCallback) {
-      this.onTickCallback(deltaTickers.length > 0 ? deltaTickers : updatedTickers.slice(0, 5), updatedTickers, [this.aspi, this.spSl20]);
+    if (this.onTickCallback && deltaTickers.length > 0) {
+      this.onTickCallback(deltaTickers, updatedTickers, [this.aspi, this.spSl20]);
     }
 
     return { tickers: updatedTickers, indices: [this.aspi, this.spSl20] };
@@ -370,7 +421,7 @@ export class IngestionService {
 
     if (this.intervalId) return;
 
-    // Run periodic market simulation every 5 seconds (instant local execution, zero external latency)
+    // Run periodic market simulation every 5 seconds (only mutates when market is open)
     this.intervalId = setInterval(async () => {
       try {
         await this.simulateMarketTicks();
